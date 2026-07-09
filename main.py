@@ -722,7 +722,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" onclick="switchTab('youtube')">YouTube Extractor</button>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
-  <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">🦎 ReptiTerra</button>
+  <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">🦎 Indigo</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
