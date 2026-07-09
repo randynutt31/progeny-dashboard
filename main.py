@@ -332,7 +332,7 @@ async def rt_add_supply_log(supply_id: str, req: Request, _: bool = Depends(rt_a
 
 # IN — every Tier 3 source posts here. Upsert on (section, source_id):
 # re-running an export updates, never duplicates.
-@app.post("/tier4/push")
+@app.post("/tier3/push")
 async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
     records = payload["records"] if isinstance(payload, dict) and "records" in payload else [payload]
     rows = [{
@@ -346,7 +346,7 @@ async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
     # on_conflict=section,source_id + Prefer: resolution=merge-duplicates -> upsert.
     # return=representation so we can count what was written.
     res = await _sb(
-        "POST", "tier4_brain",
+        "POST", "tier3_databank",
         params={"on_conflict": "section,source_id"},
         json=rows,
         prefer="resolution=merge-duplicates,return=representation",
@@ -356,7 +356,7 @@ async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
 
 # OUT — Tier 2 asks the brain questions. Optional full-text search over content
 # hits the english FTS index via content=fts(english).<q>.
-@app.get("/tier4/records")
+@app.get("/tier3/records")
 async def tier4_records(
     section: str = "randy",
     q: str | None = None,
@@ -371,7 +371,7 @@ async def tier4_records(
     }
     if q:
         params["content"] = f"fts(english).{q}"
-    res = await _sb("GET", "tier4_brain", params=params)
+    res = await _sb("GET", "tier3_databank", params=params)
     return {"section": section, "count": len(res or []), "records": res}
 
 
