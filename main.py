@@ -34,6 +34,9 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY els
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 FEEDING_TOKEN = os.environ.get("FEEDING_TOKEN", "")
+# tier3_databank is RLS-locked (deny-all) and needs the service-role key. New-format
+# sb_secret_ keys are NOT JWTs: they go in the apikey header ONLY, never Authorization.
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 
 def _sb_headers(prefer=None):
@@ -53,6 +56,30 @@ async def _sb(method, table, params=None, json=None, prefer=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     async with httpx.AsyncClient(timeout=20) as hc:
         r = await hc.request(method, url, headers=_sb_headers(prefer), params=params, json=json)
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail=f"Supabase error: {r.text}")
+    if r.status_code == 204 or not r.text:
+        return []
+    try:
+        return r.json()
+    except Exception:
+        return []
+
+
+async def _sb_service(method, table, params=None, json=None, prefer=None):
+    """Supabase REST for the RLS-locked tier3_databank, using the service-role key.
+    CRITICAL: sb_secret_ keys are NOT JWTs - send the value in the apikey header ONLY.
+    Putting it in an Authorization: Bearer header gets rejected (that was the 401).
+    Feeding endpoints stay on _sb()/the anon SUPABASE_KEY and are untouched."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500,
+                            detail="Supabase service env vars (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) not set")
+    headers = {"apikey": SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json"}
+    if prefer:
+        headers["Prefer"] = prefer
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    async with httpx.AsyncClient(timeout=20) as hc:
+        r = await hc.request(method, url, headers=headers, params=params, json=json)
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=f"Supabase error: {r.text}")
     if r.status_code == 204 or not r.text:
@@ -347,7 +374,7 @@ async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
     } for r in records]
     # on_conflict=section,source_id + Prefer: resolution=merge-duplicates -> upsert.
     # return=representation so we can count what was written.
-    res = await _sb(
+    res = await _sb_service(
         "POST", "tier3_databank",
         params={"on_conflict": "section,source_id"},
         json=rows,
@@ -373,7 +400,7 @@ async def tier4_records(
     }
     if q:
         params["content"] = f"fts(english).{q}"
-    res = await _sb("GET", "tier3_databank", params=params)
+    res = await _sb_service("GET", "tier3_databank", params=params)
     return {"section": section, "count": len(res or []), "records": res}
 
 
@@ -431,7 +458,7 @@ async def tier3_ingest(payload: dict, _: bool = Depends(rt_auth)):
             "record": {"title": title, "content": content, "raw": raw},
         }
         try:
-            await _sb(
+            await _sb_service(
                 "POST", "tier3_databank",
                 params={"on_conflict": "section,source_id"},
                 json=[row],
