@@ -325,6 +325,56 @@ async def rt_add_supply_log(supply_id: str, req: Request, _: bool = Depends(rt_a
     return res
 
 
+# ── TIER 4: THE MAIN BRAIN ──────────────────────────────────────────────────────
+# tier4_brain is RLS-locked to the backend. Reuses the existing _sb() helper
+# (SUPABASE_KEY) exactly like every other endpoint here — no supabase package.
+# Table already has UNIQUE (section, source_id) and an english FTS index on content.
+
+# IN — every Tier 3 source posts here. Upsert on (section, source_id):
+# re-running an export updates, never duplicates.
+@app.post("/tier4/push")
+async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
+    records = payload["records"] if isinstance(payload, dict) and "records" in payload else [payload]
+    rows = [{
+        "section":     r.get("section", "randy"),
+        "source_type": r.get("source_type"),
+        "source_id":   r.get("source_id"),
+        "title":       r.get("title"),
+        "content":     r.get("content"),
+        "record":      r.get("record", r),
+    } for r in records]
+    # on_conflict=section,source_id + Prefer: resolution=merge-duplicates -> upsert.
+    # return=representation so we can count what was written.
+    res = await _sb(
+        "POST", "tier4_brain",
+        params={"on_conflict": "section,source_id"},
+        json=rows,
+        prefer="resolution=merge-duplicates,return=representation",
+    )
+    return {"ok": True, "written": len(res or [])}
+
+
+# OUT — Tier 2 asks the brain questions. Optional full-text search over content
+# hits the english FTS index via content=fts(english).<q>.
+@app.get("/tier4/records")
+async def tier4_records(
+    section: str = "randy",
+    q: str | None = None,
+    limit: int = 50,
+    _: bool = Depends(rt_auth),
+):
+    params = {
+        "select": "id,section,source_type,source_id,title,ingested_at",
+        "section": f"eq.{section}",
+        "order": "ingested_at.desc",
+        "limit": str(limit),
+    }
+    if q:
+        params["content"] = f"fts(english).{q}"
+    res = await _sb("GET", "tier4_brain", params=params)
+    return {"section": section, "count": len(res or []), "records": res}
+
+
 # ── Dashboard HTML ────────────────────────────────────────────────────────────
 
 DASHBOARD_HTML = """<!DOCTYPE html>
