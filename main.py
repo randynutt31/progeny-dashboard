@@ -419,6 +419,73 @@ async def tier3_measure(_: bool = Depends(rt_auth)):
     return {"count": len(rows), "total_chars": total_chars, "est_tokens": est_tokens}
 
 
+# ── TIER 3 -> TIER 4 BELT ────────────────────────────────────────────────────────
+# Move the 'randy' section off tier3_databank onto tier4_main. Same auth + service
+# key as /tier3/records. Upsert on (source_section, source_id) so re-running the
+# belt never duplicates. tier4_main already has UNIQUE (source_section, source_id).
+@app.post("/tier4/load")
+async def tier4_load(_: bool = Depends(rt_auth)):
+    section = "randy"
+    batch_size = 50
+    offset = 0
+    moved = 0
+    while True:
+        batch = await _sb_service(
+            "GET", "tier3_databank",
+            params={
+                "select": "section,source_type,source_id,title,content,record,ingested_at",
+                "section": f"eq.{section}",
+                "order": "id.asc",
+                "limit": str(batch_size),
+                "offset": str(offset),
+            },
+        )
+        if not batch:
+            break
+        rows = [{
+            "source_section":     r.get("section"),
+            "source_type":        r.get("source_type"),
+            "source_id":          r.get("source_id"),
+            "title":              r.get("title"),
+            "content":            r.get("content"),
+            "record":             r.get("record"),
+            "source_ingested_at": r.get("ingested_at"),
+        } for r in batch]
+        written = await _sb_service(
+            "POST", "tier4_main",
+            params={"on_conflict": "source_section,source_id"},
+            json=rows,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        moved += len(written or [])
+        if len(batch) < batch_size:
+            break
+        offset += batch_size
+    return {"ok": True, "moved": moved, "section": section}
+
+
+# Proof the belt ran clean: source count vs landed count, plus a per-shelf catalog
+# of everything now sitting on tier4_main.
+@app.get("/tier4/status")
+async def tier4_status(_: bool = Depends(rt_auth)):
+    section = "randy"
+    t3 = await _sb_service(
+        "GET", "tier3_databank",
+        params={"select": "source_id", "section": f"eq.{section}", "limit": "1000000"},
+    )
+    tier3_count = len(t3 or [])
+    t4 = await _sb_service(
+        "GET", "tier4_main",
+        params={"select": "source_section", "limit": "1000000"},
+    )
+    sections: dict = {}
+    for r in (t4 or []):
+        s = r.get("source_section")
+        sections[s] = sections.get(s, 0) + 1
+    tier4_count = sections.get(section, 0)
+    return {"tier3_count": tier3_count, "tier4_count": tier4_count, "sections": sections}
+
+
 # ── PASTE CHAT -> TIER 3 ─────────────────────────────────────────────────────────
 # Clean a pasted Claude conversation with the SAME Anthropic client/key /api/ai uses,
 # then file one row to tier3_databank via the same _sb() path /tier3/push uses.
@@ -738,39 +805,29 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- AGENT CONTROL -->
+<!-- AGENT CONTROL — Tier 3 -> Tier 4 belt -->
 <div class="panel" id="panel-agent">
   <div class="two-col">
     <div>
       <div class="card">
-        <div class="card-title">Send Context to Brain</div>
-        <div class="chip-row">
-          <button class="chip" onclick="document.getElementById('sourceInput').value='session'">Session Extract</button>
-          <button class="chip" onclick="document.getElementById('sourceInput').value='decision'">Decision Log</button>
-          <button class="chip" onclick="document.getElementById('sourceInput').value='project'">Project Update</button>
-        </div>
-        <textarea id="contextInput" placeholder="Paste your EXTRACT CONTEXT document here..."></textarea>
-        <input type="text" id="sourceInput" value="session" placeholder="Source label" style="margin-top:10px;" />
-        <button class="btn" onclick="ingestContext()">Send to Brain</button>
-        <div class="result" id="ingestResult"></div>
+        <div class="card-title">Run Load</div>
+        <p style="font-size:13px;color:#555;margin-bottom:14px;">Move every Tier 3 record in section <strong>randy</strong> onto the Tier 4 belt. Safe to re-run — it upserts, never duplicates.</p>
+        <button class="btn" onclick="runLoad()">Run Load</button>
+        <div class="result" id="loadResult"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Gauge</div>
+        <p style="font-size:13px;color:#555;margin-bottom:14px;">Tier 3 source vs Tier 4 landed. Green when the belt emptied clean.</p>
+        <div id="gaugeBox" style="padding:16px;border-radius:8px;background:#f6f6f4;text-align:center;border-left:4px solid #ccc;">Refresh to read the gauge</div>
+        <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Gauge</button>
       </div>
     </div>
     <div>
       <div class="card">
-        <div class="card-title">Query Brain</div>
-        <div class="chip-row">
-          <button class="chip" onclick="document.getElementById('queryInput').value='What is the current status of ProgenyVault?'">PV Status</button>
-          <button class="chip" onclick="document.getElementById('queryInput').value='What are all open flags right now?'">Open Flags</button>
-          <button class="chip" onclick="document.getElementById('queryInput').value='What is the next niche to build?'">Next Niche</button>
-        </div>
-        <input type="text" id="queryInput" placeholder="Ask the brain anything..." />
-        <button class="btn" onclick="queryBrain()">Ask Brain</button>
-        <div class="result" id="queryResult"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Agent Log</div>
-        <div class="log-box" id="logBox">Click refresh to load logs</div>
-        <button class="btn btn-ghost" onclick="loadLog()" style="margin-top:10px;">Refresh Log</button>
+        <div class="card-title">Catalog</div>
+        <p style="font-size:13px;color:#555;margin-bottom:14px;">What landed on Tier 4, by shelf (source section).</p>
+        <div class="log-box" id="catalogBox">Click refresh to load the catalog</div>
+        <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Catalog</button>
       </div>
     </div>
   </div>
@@ -923,47 +980,55 @@ function switchTab(tab) {
   if (tab === 'feeding') rtSwitch(RT.sub);
 }
 
-// AGENT CONTROL
-async function ingestContext() {
-  const content = document.getElementById('contextInput').value.trim();
-  if (!content) return;
-  const source = document.getElementById('sourceInput').value || 'session';
-  const result = document.getElementById('ingestResult');
-  result.textContent = '⬤ Sending to brain...';
+// AGENT CONTROL — Tier 3 -> Tier 4 belt
+const T4_TOKEN = 'RT_DASH_7f39c2a4b8e15d60';
+
+async function runLoad() {
+  const result = document.getElementById('loadResult');
+  result.textContent = '⬤ Running load...';
   result.className = 'result visible';
   try {
-    const data = await callServer('/api/ingest', {content, source});
+    const res = await fetch('/tier4/load', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-API-Token': T4_TOKEN}
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok !== true) throw new Error(data.detail || 'Load failed');
     result.className = 'result visible success';
-    result.textContent = '✓ Ingested\\n\\n' + data.summary + '\\nDecisions: ' + data.decisions_captured + ' | Flags: ' + data.flags_captured;
-    document.getElementById('contextInput').value = '';
+    result.textContent = 'Moved ' + data.moved + ' records from section [' + data.section + '].';
+    loadStatus();
   } catch(e) {
     result.className = 'result visible error';
     result.textContent = 'Error: ' + e.message;
   }
 }
 
-async function queryBrain() {
-  const question = document.getElementById('queryInput').value.trim();
-  if (!question) return;
-  const result = document.getElementById('queryResult');
-  result.textContent = '⬤ Thinking...';
-  result.className = 'result visible';
+async function loadStatus() {
+  const cat = document.getElementById('catalogBox');
+  const gauge = document.getElementById('gaugeBox');
+  cat.textContent = 'Loading...';
   try {
-    const data = await callServer('/api/query', {question});
-    result.className = 'result visible success';
-    result.textContent = data.answer;
+    const res = await fetch('/tier4/status', {headers: {'X-API-Token': T4_TOKEN}});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Status failed');
+    const secs = data.sections || {};
+    const keys = Object.keys(secs).sort();
+    cat.textContent = keys.length
+      ? keys.map(k => k + '  →  ' + secs[k] + ' records').join('\\n')
+      : 'Tier 4 is empty — nothing landed yet.';
+    const t3 = data.tier3_count, t4 = data.tier4_count;
+    const match = (t3 === t4);
+    gauge.innerHTML =
+      '<div style="font-size:24px;font-weight:700;">' + t4 + ' / ' + t3 + '</div>' +
+      '<div style="font-size:12px;color:#555;margin-top:4px;">Tier 4 landed / Tier 3 source</div>' +
+      '<div style="margin-top:8px;font-weight:600;">' +
+        (match ? '✓ Belt emptied clean' : '⚠ ' + (t3 - t4) + ' still on the belt') + '</div>';
+    gauge.style.borderLeft = '4px solid ' + (match ? '#2ea043' : '#e05555');
+    gauge.style.background = match ? '#eaf7ed' : '#fbeaea';
+    gauge.style.color = match ? '#1a7f37' : '#b02a2a';
   } catch(e) {
-    result.className = 'result visible error';
-    result.textContent = 'Error: ' + e.message;
-  }
-}
-
-async function loadLog() {
-  try {
-    const data = await fetch('/api/log').then(r => r.json());
-    document.getElementById('logBox').textContent = (data.log || []).join('\\n');
-  } catch(e) {
-    document.getElementById('logBox').textContent = 'Could not load log';
+    cat.textContent = 'Could not load catalog: ' + e.message;
+    gauge.textContent = 'Gauge unavailable';
   }
 }
 
