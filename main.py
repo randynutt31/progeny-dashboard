@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import os
+import json
+import hashlib
 import anthropic
 import httpx
 
@@ -375,6 +377,74 @@ async def tier4_records(
     return {"section": section, "count": len(res or []), "records": res}
 
 
+# ── PASTE CHAT -> TIER 3 ─────────────────────────────────────────────────────────
+# Clean a pasted Claude conversation with the SAME Anthropic client/key /api/ai uses,
+# then file one row to tier3_databank via the same _sb() path /tier3/push uses.
+@app.post("/tier3/ingest")
+async def tier3_ingest(payload: dict, _: bool = Depends(rt_auth)):
+    try:
+        raw = (payload or {}).get("text") or ""
+        if not raw.strip():
+            return {"ok": False, "error": "No text provided"}
+        if not client:
+            return {"ok": False, "error": "ANTHROPIC_API_KEY not set"}
+
+        instruction = (
+            "Clean this exported Claude conversation into one readable record. "
+            "Strip UI artifacts, timestamps, and repeated boilerplate. "
+            "Return JSON only: {\"title\": a short descriptive title, "
+            "\"content\": the cleaned full conversation}."
+        )
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=8000,
+                messages=[{"role": "user", "content": f"{instruction}\n\n{raw}"}],
+            )
+            text = " ".join(b.text for b in response.content if hasattr(b, "text")).strip()
+        except Exception as e:
+            return {"ok": False, "error": f"Claude call failed: {e}"}
+
+        # Strip a ```json fence if Claude wrapped the JSON.
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        try:
+            parsed = json.loads(text)
+        except Exception as e:
+            return {"ok": False, "error": f"Claude did not return valid JSON: {e}"}
+
+        title = parsed.get("title")
+        content = parsed.get("content")
+        if not title or content is None:
+            return {"ok": False, "error": "Claude JSON missing title or content"}
+
+        source_id = "paste-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+        row = {
+            "section": "randy",
+            "source_type": "claude_conversation",
+            "source_id": source_id,
+            "title": title,
+            "content": content,
+            "record": {"title": title, "content": content, "raw": raw},
+        }
+        try:
+            await _sb(
+                "POST", "tier3_databank",
+                params={"on_conflict": "section,source_id"},
+                json=[row],
+                prefer="resolution=merge-duplicates,return=representation",
+            )
+        except HTTPException as e:
+            return {"ok": False, "error": f"Supabase error: {e.detail}"}
+
+        return {"ok": True, "title": title, "source_id": source_id}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # ── Dashboard HTML ────────────────────────────────────────────────────────────
 
 DASHBOARD_HTML = """<!DOCTYPE html>
@@ -541,6 +611,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">🦎 ReptiTerra</button>
+  <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
 </nav>
 
 <!-- COMMAND CENTER -->
@@ -705,6 +776,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- PASTE CHAT -> TIER 3 -->
+<div class="panel" id="panel-tier3">
+  <div class="card">
+    <div class="card-title">Paste Chat → Tier 3</div>
+    <p style="font-size:13px;color:#555;margin-bottom:14px;">Paste an exported Claude conversation — it gets cleaned and filed to the Tier 3 databank.</p>
+    <textarea id="tier3Paste" placeholder="Paste the full exported Claude conversation here..."></textarea>
+    <button class="btn" onclick="ingestTier3()">Clean &amp; File to Tier 3</button>
+    <div class="result" id="tier3Status"></div>
+  </div>
+</div>
+
 <!-- FINANCE AI -->
 <div class="panel" id="panel-finance">
   <div class="card">
@@ -792,7 +874,7 @@ checkAgent();
 setInterval(checkAgent, 30000);
 
 function switchTab(tab) {
-  const tabs = ['command','tracker','agent','niche','youtube','finance','tools','feeding'];
+  const tabs = ['command','tracker','agent','niche','youtube','finance','tools','feeding','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
@@ -911,6 +993,33 @@ async function queryFinance() {
   } catch(e) {
     result.className = 'result visible error';
     result.textContent = 'Error: ' + e.message;
+  }
+}
+
+// PASTE CHAT -> TIER 3
+async function ingestTier3() {
+  const text = document.getElementById('tier3Paste').value.trim();
+  const status = document.getElementById('tier3Status');
+  if (!text) { status.className = 'result visible'; status.textContent = 'Paste a conversation first.'; return; }
+  status.className = 'result visible';
+  status.textContent = '⬤ Cleaning & filing to Tier 3...';
+  try {
+    const res = await fetch('/tier3/ingest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-API-Token': RT.token},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.className = 'result visible success';
+      status.textContent = '✓ Filed to Tier 3: ' + data.title;
+    } else {
+      status.className = 'result visible error';
+      status.textContent = '✗ ' + (data.error || 'Failed');
+    }
+  } catch(e) {
+    status.className = 'result visible error';
+    status.textContent = '✗ ' + e.message;
   }
 }
 
