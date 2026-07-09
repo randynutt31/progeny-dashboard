@@ -426,18 +426,21 @@ async def tier3_measure(_: bool = Depends(rt_auth)):
 @app.post("/tier4/load")
 async def tier4_load(_: bool = Depends(rt_auth)):
     section = "randy"
-    batch_size = 50
-    offset = 0
+    batch_size = 25
+    last_id = 0
     moved = 0
+    # Keyset (range) pagination on id so we never hold all 294 huge rows in one
+    # read: pull 25 at a time via id>last_id, write them, then advance the cursor.
+    # id is selected only to drive the cursor; the rest are the write columns.
     while True:
         batch = await _sb_service(
             "GET", "tier3_databank",
             params={
-                "select": "section,source_type,source_id,title,content,record,ingested_at",
+                "select": "id,section,source_type,source_id,title,content,record,ingested_at",
                 "section": f"eq.{section}",
+                "id": f"gt.{last_id}",
                 "order": "id.asc",
                 "limit": str(batch_size),
-                "offset": str(offset),
             },
         )
         if not batch:
@@ -458,9 +461,9 @@ async def tier4_load(_: bool = Depends(rt_auth)):
             prefer="resolution=merge-duplicates,return=representation",
         )
         moved += len(written or [])
+        last_id = batch[-1]["id"]
         if len(batch) < batch_size:
             break
-        offset += batch_size
     return {"ok": True, "moved": moved, "section": section}
 
 
