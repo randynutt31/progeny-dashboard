@@ -404,6 +404,21 @@ async def tier4_records(
     return {"section": section, "count": len(res or []), "records": res}
 
 
+# Same auth + service-key read as /tier3/records, but returns only size metrics
+# for the 'randy' section instead of the records themselves.
+@app.get("/tier3/measure")
+async def tier3_measure(_: bool = Depends(rt_auth)):
+    params = {
+        "select": "content",
+        "section": "eq.randy",
+    }
+    res = await _sb_service("GET", "tier3_databank", params=params)
+    rows = res or []
+    total_chars = sum(len(r.get("content") or "") for r in rows)
+    est_tokens = round(total_chars / 4)
+    return {"count": len(rows), "total_chars": total_chars, "est_tokens": est_tokens}
+
+
 # ── PASTE CHAT -> TIER 3 ─────────────────────────────────────────────────────────
 # Clean a pasted Claude conversation with the SAME Anthropic client/key /api/ai uses,
 # then file one row to tier3_databank via the same _sb() path /tier3/push uses.
