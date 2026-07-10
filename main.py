@@ -393,7 +393,7 @@ async def tier4_records(
     _: bool = Depends(rt_auth),
 ):
     params = {
-        "select": "id,section,source_type,source_id,title,ingested_at",
+        "select": "id,section,source_type,source_id,title,content,record,ingested_at",
         "section": f"eq.{section}",
         "order": "ingested_at.desc",
         "limit": str(limit),
@@ -723,6 +723,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
+  <button class="nav-tab" onclick="switchTab('marketing')">Marketing</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
@@ -953,6 +954,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="rt-modal-bg" id="rtModalBg"><div class="rt-modal" id="rtModal"></div></div>
 </div>
 
+<!-- MARKETING -->
+<div class="panel" id="panel-marketing">
+  <div class="card">
+    <div class="card-title">Marketing — Agent Board</div>
+    <p style="font-size:13px;color:#555;margin-bottom:14px;">Live from the Tier 3 <strong>marketing_status</strong> card. Per agent: last run, what it produced, and what it's waiting on.</p>
+    <button class="btn btn-ghost" onclick="loadMarketing()">Refresh Board</button>
+    <div class="result" id="marketingMeta" style="margin-top:14px;"></div>
+  </div>
+  <div id="marketingBoard"></div>
+</div>
+
 <script>
 // All API calls go through our own server — no CORS issues
 async function callServer(endpoint, body) {
@@ -978,11 +990,12 @@ checkAgent();
 setInterval(checkAgent, 30000);
 
 function switchTab(tab) {
-  const tabs = ['command','tracker','agent','niche','youtube','finance','tools','feeding','tier3'];
+  const tabs = ['command','tracker','agent','niche','youtube','finance','tools','feeding','marketing','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'feeding') rtSwitch(RT.sub);
+  if (tab === 'marketing') loadMarketing();
 }
 
 // AGENT CONTROL — Tier 3 -> Tier 4 belt
@@ -1034,6 +1047,62 @@ async function loadStatus() {
   } catch(e) {
     cat.textContent = 'Could not load catalog: ' + e.message;
     gauge.textContent = 'Gauge unavailable';
+  }
+}
+
+// MARKETING — read the marketing_status card via /tier3/records, render the agent board
+function mktEsc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function mktAgentCard(a) {
+  const produced = Object.entries(a.produced || {})
+    .map(([k,v]) => '<span class="badge active" style="margin-right:6px;">' + mktEsc(k) + ': ' + mktEsc(v) + '</span>')
+    .join('') || '<span style="color:#555;font-size:12px;">nothing produced</span>';
+  const waiting = (a.waiting_on && a.waiting_on.length)
+    ? '<ul class="flags-list" style="margin-top:10px;">' +
+        a.waiting_on.map(w => '<li><span class="flag-num">!</span>' + mktEsc(w) + '</li>').join('') +
+      '</ul>'
+    : '<div style="font-size:12px;color:#4caf50;margin-top:10px;">✓ nothing outstanding</div>';
+  return '<div class="project-card" style="margin-bottom:12px;">' +
+    '<div class="project-name">' + mktEsc(a.agent) + '</div>' +
+    '<div class="project-status" style="color:#888;">last run: ' + mktEsc(a.last_run || '—') + '</div>' +
+    '<div style="margin-top:10px;">' + produced + '</div>' +
+    waiting +
+    '</div>';
+}
+async function loadMarketing() {
+  const meta = document.getElementById('marketingMeta');
+  const board = document.getElementById('marketingBoard');
+  meta.className = 'result visible';
+  meta.textContent = '⬤ Loading marketing board...';
+  board.innerHTML = '';
+  try {
+    const res = await fetch('/tier3/records?section=marketing_status&limit=1', {
+      headers: {'X-API-Token': T4_TOKEN}
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Request failed');
+    const rec = (data.records || [])[0];
+    if (!rec) {
+      meta.className = 'result visible error';
+      meta.textContent = 'No marketing_status card filed yet — run handoff.py with the Tier 3 push enabled.';
+      return;
+    }
+    let manifest = rec.record;
+    if (!manifest && rec.content) { try { manifest = JSON.parse(rec.content); } catch(e) {} }
+    if (!manifest || !Array.isArray(manifest.agents)) {
+      meta.className = 'result visible error';
+      meta.textContent = 'Card found, but it has no agent manifest to render.';
+      return;
+    }
+    meta.className = 'result visible success';
+    meta.textContent = (manifest.display_name || manifest.business || 'marketing') +
+      '  —  card: ' + (manifest.card_status || '—') +
+      '   (generated ' + (manifest.generated_at || '—') + ')';
+    board.innerHTML = manifest.agents.map(mktAgentCard).join('');
+  } catch(e) {
+    meta.className = 'result visible error';
+    meta.textContent = 'Error: ' + e.message;
   }
 }
 
