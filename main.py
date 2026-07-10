@@ -716,14 +716,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <nav class="nav">
   <button class="nav-tab active" onclick="switchTab('command')">Command Center</button>
-  <button class="nav-tab" onclick="switchTab('tracker')">Project Tracker</button>
   <button class="nav-tab" onclick="switchTab('agent')">Agent Control</button>
+  <button class="nav-tab" onclick="switchTab('marketing')">Marketing</button>
+  <button class="nav-tab" onclick="switchTab('tracker')">Project Tracker</button>
+  <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
+  <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
   <button class="nav-tab" onclick="switchTab('niche')">Niche Scorer</button>
   <button class="nav-tab" onclick="switchTab('youtube')">YouTube Extractor</button>
-  <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
-  <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
-  <button class="nav-tab" onclick="switchTab('marketing')">Marketing</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
@@ -990,7 +990,7 @@ checkAgent();
 setInterval(checkAgent, 30000);
 
 function switchTab(tab) {
-  const tabs = ['command','tracker','agent','niche','youtube','finance','tools','feeding','marketing','tier3'];
+  const tabs = ['command','agent','marketing','tracker','finance','feeding','niche','youtube','tools','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
