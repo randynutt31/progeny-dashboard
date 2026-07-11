@@ -1333,6 +1333,13 @@ const SALES = { view:'books', metric:'revenue', expanded:{}, companies:[], perio
 
 function stEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function stColor(slug){ return SALES_COLORS[slug] || '#7a7e89'; }
+// Mix-column code: known SALES_MIX code (PV/RTL/DOI), else first 3-4 letters of
+// the company's name/slug, uppercased.
+function stCode(slug){
+  const mm = SALES_MIX.find(x=>x.slug===slug);
+  if (mm) return mm.code;
+  return String(SALES.names[slug] || slug || '').slice(0,4).toUpperCase();
+}
 function stFmt(metric, v){
   if (v==null || v==='') return '—';
   const n = Number(v);
@@ -1446,8 +1453,8 @@ function salesKpis(){
   const money = {money:true}, plain = {};
   const revCur = stTotal(cur,'revenue'), revPrev = prev?stTotal(prev,'revenue'):null;
   const rMoM = stMoM(revCur, revPrev, false);
-  const pvCur = stVal('progenyvault',cur,'mrr'), pvPrev = prev?stVal('progenyvault',prev,'mrr'):null;
-  const pvMoM = stMoM(pvCur, pvPrev, false);
+  const mrrCur = stTotal(cur,'mrr'), mrrPrev = prev?stTotal(prev,'mrr'):null;
+  const mrrMoM = stMoM(mrrCur, mrrPrev, false);
   const custCur = stTotal(cur,'customers');
   let netNew=0, hasNN=false;
   for (const s of SALES.companies){ const n=stVal(s,cur,'new'), c=stVal(s,cur,'churned'); if(n!=null){netNew+=n;hasNN=true;} if(c!=null){netNew-=c;hasNN=true;} }
@@ -1466,7 +1473,7 @@ function salesKpis(){
   const kpi = (lab,val,sub,cls) => `<div class="st-kpi"><div class="st-kpi-lab">${lab}</div><div class="st-kpi-val">${val}</div><div class="st-kpi-sub ${cls||''}">${sub}</div></div>`;
   return `<div class="st-kpis">
     ${kpi('Portfolio Revenue', stFmt(money,revCur), rMoM.text+' MoM', rMoM.cls)}
-    ${kpi('PV MRR', stFmt(money,pvCur), pvMoM.text+' MoM', pvMoM.cls)}
+    ${kpi('Portfolio MRR', stFmt(money,mrrCur), mrrMoM.text+' MoM', mrrMoM.cls)}
     ${kpi('Portfolio Customers', stFmt(plain,custCur), nn)}
     ${kpi('Top Mover', moverTxt, 'best revenue MoM')}
   </div>`;
@@ -1553,10 +1560,15 @@ function salesConsolidated(){
     const pi = periods.indexOf(per);
     const pv = pi>0 ? stTotal(periods[pi-1], m.key) : null;
     const mom = stMoM(tot, pv, m.invert);
-    const mix = SALES_MIX.map(mm => { const v=stVal(mm.slug,per,m.key); if(v==null||tot==null||tot===0) return '—'; return (v/tot*100).toFixed(1)+'%'; });
-    rows += `<tr class="${per===cur?'st-total':''}"><td class="st-co">${stEsc(per)}</td><td>${stFmt(m,tot)}</td><td class="${mom.cls}">${mom.text}</td><td>${mix[0]}</td><td>${mix[1]}</td><td>${mix[2]}</td></tr>`;
+    const mixCells = SALES.companies.map(s => {
+      const v = stVal(s, per, m.key);
+      if (v==null || tot==null || tot===0) return '<td>—</td>';
+      return `<td>${(v/tot*100).toFixed(1)}%</td>`;
+    }).join('');
+    rows += `<tr class="${per===cur?'st-total':''}"><td class="st-co">${stEsc(per)}</td><td>${stFmt(m,tot)}</td><td class="${mom.cls}">${mom.text}</td>${mixCells}</tr>`;
   });
-  const thead = '<tr><th class="st-co">Month</th><th>Total</th><th>MoM</th><th>PV mix</th><th>RTL mix</th><th>DOI mix</th></tr>';
+  const mixHead = SALES.companies.map(s => `<th>${stEsc(stCode(s))} mix</th>`).join('');
+  const thead = `<tr><th class="st-co">Month</th><th>Total</th><th>MoM</th>${mixHead}</tr>`;
   return `<div class="st-cons-chart">${svg}<div class="st-legend">${legend}</div></div>
     <div class="st-scroll"><table class="st-matrix"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>`;
 }
