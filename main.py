@@ -762,12 +762,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <nav class="nav">
   <button class="nav-tab active" onclick="switchTab('command')">Command Center</button>
-  <button class="nav-tab" onclick="switchTab('agent')">Agent Control</button>
-  <button class="nav-tab" onclick="switchTab('marketing')">Marketing</button>
-  <button class="nav-tab" onclick="switchTab('tracker')">Project Tracker</button>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
-  <button class="nav-tab" onclick="switchTab('niche')">Niche Scorer</button>
   <button class="nav-tab" onclick="switchTab('youtube')">YouTube Extractor</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
@@ -816,111 +812,148 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
     </div>
   </div>
-  <!-- SALES TRACKER — renders on Command Center. Reads Tier 3 section sales_status. -->
-  <div class="st" id="salesTracker">
-    <div class="st-head">
+  <!-- Command Center selector: gates Sales / Agent / Marketing / Tracker / Niche below the project cards. Empty by default. -->
+  <div style="margin-top:22px;">
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">View</label>
+    <select id="ccMenu" onchange="ccShow(this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:220px;">
+      <option value="">-- Select --</option>
+      <option value="sales">Sales</option>
+      <option value="agent">Agent Control</option>
+      <option value="marketing">Marketing</option>
+      <option value="tracker">Project Tracker</option>
+      <option value="niche">Niche Scorer</option>
+    </select>
+  </div>
+
+  <!-- CC: SALES -->
+  <div id="cc-sales" style="display:none;margin-top:18px;">
+    <!-- SALES TRACKER — renders on Command Center. Reads Tier 3 section sales_status. -->
+    <div class="st" id="salesTracker">
+      <div class="st-head">
+        <div>
+          <span class="st-title">Sales</span>
+          <span class="st-asof" id="stAsOf"></span>
+        </div>
+        <div class="st-toggle" id="stToggle">
+          <button class="active" onclick="salesSetView('books')">Tier 3 · Books</button>
+          <button onclick="salesSetView('consolidated')">Tier 4 · Consolidated</button>
+        </div>
+      </div>
+      <div class="st-body" id="stBody">
+        <div class="st-msg" id="stMsg">Loading sales…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CC: AGENT CONTROL — Tier 3 -> Tier 4 belt -->
+  <div id="cc-agent" style="display:none;margin-top:18px;">
+    <div class="two-col">
       <div>
-        <span class="st-title">Sales</span>
-        <span class="st-asof" id="stAsOf"></span>
+        <div class="card">
+          <div class="card-title">Run Load</div>
+          <p style="font-size:13px;color:#555;margin-bottom:14px;">Move every Tier 3 record in section <strong>randy</strong> onto the Tier 4 belt. Safe to re-run — it upserts, never duplicates.</p>
+          <button class="btn" onclick="runLoad()">Run Load</button>
+          <div class="result" id="loadResult"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Gauge</div>
+          <p style="font-size:13px;color:#555;margin-bottom:14px;">Tier 3 source vs Tier 4 landed. Green when the belt emptied clean.</p>
+          <div id="gaugeBox" style="padding:16px;border-radius:8px;background:#f6f6f4;text-align:center;border-left:4px solid #ccc;">Refresh to read the gauge</div>
+          <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Gauge</button>
+        </div>
       </div>
-      <div class="st-toggle" id="stToggle">
-        <button class="active" onclick="salesSetView('books')">Tier 3 · Books</button>
-        <button onclick="salesSetView('consolidated')">Tier 4 · Consolidated</button>
+      <div>
+        <div class="card">
+          <div class="card-title">Catalog</div>
+          <p style="font-size:13px;color:#555;margin-bottom:14px;">What landed on Tier 4, by shelf (source section).</p>
+          <div class="log-box" id="catalogBox">Click refresh to load the catalog</div>
+          <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Catalog</button>
+        </div>
       </div>
-    </div>
-    <div class="st-body" id="stBody">
-      <div class="st-msg" id="stMsg">Loading sales…</div>
     </div>
   </div>
-</div>
 
-<!-- PROJECT TRACKER -->
-<div class="panel" id="panel-tracker">
-  <div class="card">
-    <div class="card-title">Active Builds</div>
-    <div class="tracker-row tracker-header"><div>Project</div><div>Status</div><div>Progress</div><div>Next Action</div></div>
-    <div class="tracker-row"><div style="font-weight:600">ProgenyVault</div><div><span class="badge priority">Priority</span></div><div style="color:#c9a84c">45%</div><div style="color:#888;font-size:12px">Stack orientation → resume build</div></div>
-    <div class="tracker-row"><div style="font-weight:600">Den of Indigos</div><div><span class="badge active">Active</span></div><div style="color:#4caf50">60%</div><div style="color:#888;font-size:12px">Resend domain verify → email sequences live</div></div>
-    <div class="tracker-row"><div style="font-weight:600">ReptiTerra Labs</div><div><span class="badge backburner">Backburner</span></div><div style="color:#555">70%</div><div style="color:#888;font-size:12px">Write Tropical + Tunnel Blend copy</div></div>
-    <div class="tracker-row"><div style="font-weight:600">Vault Trader</div><div><span class="badge blocked">Blocked</span></div><div style="color:#e05555">90%</div><div style="color:#888;font-size:12px">Authy 2FA → Alpaca keys → Railway deploy</div></div>
-    <div class="tracker-row"><div style="font-weight:600">Progyny Infinite Trust</div><div><span class="badge blocked">Pending</span></div><div style="color:#e05555">20%</div><div style="color:#888;font-size:12px">Wait for DOR audit letter June 30</div></div>
-    <div class="tracker-row"><div style="font-weight:600">PICP + Agent + Dashboard</div><div><span class="badge active">Live</span></div><div style="color:#4caf50">90%</div><div style="color:#888;font-size:12px">Package for Shawn Dark + user manual</div></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Factory Pipeline</div>
-    <div class="tracker-row tracker-header"><div>Niche</div><div>Score</div><div>Status</div><div>Notes</div></div>
-    <div class="tracker-row"><div>Koi / Fancy Goldfish</div><div style="color:#c9a84c;font-weight:700">42</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Highest score</div></div>
-    <div class="tracker-row"><div>Tarantula / Invert</div><div style="color:#c9a84c;font-weight:700">41</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Huge community</div></div>
-    <div class="tracker-row"><div>Dart Frog</div><div style="color:#c9a84c;font-weight:700">40</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Complex genetics</div></div>
-    <div class="tracker-row"><div>Small Livestock</div><div style="color:#c9a84c;font-weight:700">38</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Fastest — PV reuse</div></div>
-    <div class="tracker-row"><div>Entertainer Analytics</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$14.99/mo, stigma moat</div></div>
-    <div class="tracker-row"><div>Philately</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$19.99/mo, $3.4B market</div></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Open Flags</div>
-    <ul class="flags-list">
-      <li><span class="flag-num">01</span>Stack orientation session required before ProgenyVault build resumes</li>
-      <li><span class="flag-num">02</span>Alpaca 2FA — Authy from App Store, unblocks Vault Trader</li>
-      <li><span class="flag-num">03</span>Resend domain verification — all three domains pending</li>
-      <li><span class="flag-num">04</span>Oregon DOR audit letter by June 30 — bring to Claude first, no action before that</li>
-      <li><span class="flag-num">05</span>Back garage door — 16" overfit unresolved</li>
-      <li><span class="flag-num">06</span>Greywater permit — Oregon DEQ, not started</li>
-      <li><span class="flag-num">07</span>Unknown AWT advisor — "master of micro business" identity unconfirmed</li>
-      <li><span class="flag-num">08</span>Third Factory niche — pending</li>
-      <li><span class="flag-num">09</span>ReptiTerra — Tropical and Tunnel Blend listing copy not written</li>
-      <li><span class="flag-num">10</span>Self-hosting review — July 7</li>
-    </ul>
-  </div>
-</div>
-
-<!-- AGENT CONTROL — Tier 3 -> Tier 4 belt -->
-<div class="panel" id="panel-agent">
-  <div class="two-col">
-    <div>
-      <div class="card">
-        <div class="card-title">Run Load</div>
-        <p style="font-size:13px;color:#555;margin-bottom:14px;">Move every Tier 3 record in section <strong>randy</strong> onto the Tier 4 belt. Safe to re-run — it upserts, never duplicates.</p>
-        <button class="btn" onclick="runLoad()">Run Load</button>
-        <div class="result" id="loadResult"></div>
+  <!-- CC: MARKETING -->
+  <div id="cc-marketing" style="display:none;margin-top:18px;">
+    <div class="card">
+      <div class="card-title">Marketing — Agent Board</div>
+      <p style="font-size:13px;color:#555;margin-bottom:14px;">Live from the Tier 3 <strong>marketing_status</strong> card. Pick a company and an as-of date to view its board.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+          <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Company</label>
+          <select id="mktCompany" onchange="mktOnCompanyChange()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:190px;"></select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">As of</label>
+          <select id="mktDate" onchange="mktRenderBoard()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:170px;"></select>
+        </div>
+        <button class="btn btn-ghost" onclick="loadMarketing()" style="margin-top:0;">Refresh Board</button>
       </div>
-      <div class="card">
-        <div class="card-title">Gauge</div>
-        <p style="font-size:13px;color:#555;margin-bottom:14px;">Tier 3 source vs Tier 4 landed. Green when the belt emptied clean.</p>
-        <div id="gaugeBox" style="padding:16px;border-radius:8px;background:#f6f6f4;text-align:center;border-left:4px solid #ccc;">Refresh to read the gauge</div>
-        <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Gauge</button>
-      </div>
+      <div class="result" id="marketingMeta" style="margin-top:14px;"></div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-title">Catalog</div>
-        <p style="font-size:13px;color:#555;margin-bottom:14px;">What landed on Tier 4, by shelf (source section).</p>
-        <div class="log-box" id="catalogBox">Click refresh to load the catalog</div>
-        <button class="btn btn-ghost" onclick="loadStatus()" style="margin-top:10px;">Refresh Catalog</button>
-      </div>
+    <div id="marketingBoard"></div>
+  </div>
+
+  <!-- CC: PROJECT TRACKER -->
+  <div id="cc-tracker" style="display:none;margin-top:18px;">
+    <div class="card">
+      <div class="card-title">Active Builds</div>
+      <div class="tracker-row tracker-header"><div>Project</div><div>Status</div><div>Progress</div><div>Next Action</div></div>
+      <div class="tracker-row"><div style="font-weight:600">ProgenyVault</div><div><span class="badge priority">Priority</span></div><div style="color:#c9a84c">45%</div><div style="color:#888;font-size:12px">Stack orientation → resume build</div></div>
+      <div class="tracker-row"><div style="font-weight:600">Den of Indigos</div><div><span class="badge active">Active</span></div><div style="color:#4caf50">60%</div><div style="color:#888;font-size:12px">Resend domain verify → email sequences live</div></div>
+      <div class="tracker-row"><div style="font-weight:600">ReptiTerra Labs</div><div><span class="badge backburner">Backburner</span></div><div style="color:#555">70%</div><div style="color:#888;font-size:12px">Write Tropical + Tunnel Blend copy</div></div>
+      <div class="tracker-row"><div style="font-weight:600">Vault Trader</div><div><span class="badge blocked">Blocked</span></div><div style="color:#e05555">90%</div><div style="color:#888;font-size:12px">Authy 2FA → Alpaca keys → Railway deploy</div></div>
+      <div class="tracker-row"><div style="font-weight:600">Progyny Infinite Trust</div><div><span class="badge blocked">Pending</span></div><div style="color:#e05555">20%</div><div style="color:#888;font-size:12px">Wait for DOR audit letter June 30</div></div>
+      <div class="tracker-row"><div style="font-weight:600">PICP + Agent + Dashboard</div><div><span class="badge active">Live</span></div><div style="color:#4caf50">90%</div><div style="color:#888;font-size:12px">Package for Shawn Dark + user manual</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Factory Pipeline</div>
+      <div class="tracker-row tracker-header"><div>Niche</div><div>Score</div><div>Status</div><div>Notes</div></div>
+      <div class="tracker-row"><div>Koi / Fancy Goldfish</div><div style="color:#c9a84c;font-weight:700">42</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Highest score</div></div>
+      <div class="tracker-row"><div>Tarantula / Invert</div><div style="color:#c9a84c;font-weight:700">41</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Huge community</div></div>
+      <div class="tracker-row"><div>Dart Frog</div><div style="color:#c9a84c;font-weight:700">40</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Complex genetics</div></div>
+      <div class="tracker-row"><div>Small Livestock</div><div style="color:#c9a84c;font-weight:700">38</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Fastest — PV reuse</div></div>
+      <div class="tracker-row"><div>Entertainer Analytics</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$14.99/mo, stigma moat</div></div>
+      <div class="tracker-row"><div>Philately</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$19.99/mo, $3.4B market</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Open Flags</div>
+      <ul class="flags-list">
+        <li><span class="flag-num">01</span>Stack orientation session required before ProgenyVault build resumes</li>
+        <li><span class="flag-num">02</span>Alpaca 2FA — Authy from App Store, unblocks Vault Trader</li>
+        <li><span class="flag-num">03</span>Resend domain verification — all three domains pending</li>
+        <li><span class="flag-num">04</span>Oregon DOR audit letter by June 30 — bring to Claude first, no action before that</li>
+        <li><span class="flag-num">05</span>Back garage door — 16" overfit unresolved</li>
+        <li><span class="flag-num">06</span>Greywater permit — Oregon DEQ, not started</li>
+        <li><span class="flag-num">07</span>Unknown AWT advisor — "master of micro business" identity unconfirmed</li>
+        <li><span class="flag-num">08</span>Third Factory niche — pending</li>
+        <li><span class="flag-num">09</span>ReptiTerra — Tropical and Tunnel Blend listing copy not written</li>
+        <li><span class="flag-num">10</span>Self-hosting review — July 7</li>
+      </ul>
     </div>
   </div>
-</div>
 
-<!-- NICHE SCORER -->
-<div class="panel" id="panel-niche">
-  <div class="card">
-    <div class="card-title">Score a New Niche</div>
-    <input type="text" id="nicheInput" placeholder="Describe the niche (e.g. beekeeping operations tracker)" />
-    <button class="btn" onclick="scoreNiche()">Score It</button>
-    <div class="result" id="nicheResult"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Current Pipeline</div>
-    <div class="score-grid">
-      <div class="niche-card"><div class="niche-name">Koi / Fancy Goldfish</div><div class="niche-score">42</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Tarantula / Invert</div><div class="niche-score">41</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Dart Frog</div><div class="niche-score">40</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Mushroom Cultivation</div><div class="niche-score">39</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Hotshot Trucking</div><div class="niche-score">39</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Small Livestock</div><div class="niche-score">38</div><div class="niche-verdict go">GO</div></div>
-      <div class="niche-card"><div class="niche-name">Microgreens</div><div class="niche-score">35</div><div class="niche-verdict maybe">MAYBE</div></div>
-      <div class="niche-card"><div class="niche-name">Entertainer Analytics</div><div class="niche-score">—</div><div class="niche-verdict tbd">Queued</div></div>
-      <div class="niche-card"><div class="niche-name">Philately</div><div class="niche-score">—</div><div class="niche-verdict tbd">Queued</div></div>
+  <!-- CC: NICHE SCORER -->
+  <div id="cc-niche" style="display:none;margin-top:18px;">
+    <div class="card">
+      <div class="card-title">Score a New Niche</div>
+      <input type="text" id="nicheInput" placeholder="Describe the niche (e.g. beekeeping operations tracker)" />
+      <button class="btn" onclick="scoreNiche()">Score It</button>
+      <div class="result" id="nicheResult"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Current Pipeline</div>
+      <div class="score-grid">
+        <div class="niche-card"><div class="niche-name">Koi / Fancy Goldfish</div><div class="niche-score">42</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Tarantula / Invert</div><div class="niche-score">41</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Dart Frog</div><div class="niche-score">40</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Mushroom Cultivation</div><div class="niche-score">39</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Hotshot Trucking</div><div class="niche-score">39</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Small Livestock</div><div class="niche-score">38</div><div class="niche-verdict go">GO</div></div>
+        <div class="niche-card"><div class="niche-name">Microgreens</div><div class="niche-score">35</div><div class="niche-verdict maybe">MAYBE</div></div>
+        <div class="niche-card"><div class="niche-name">Entertainer Analytics</div><div class="niche-score">—</div><div class="niche-verdict tbd">Queued</div></div>
+        <div class="niche-card"><div class="niche-name">Philately</div><div class="niche-score">—</div><div class="niche-verdict tbd">Queued</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -975,10 +1008,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <!-- TOOLS -->
 <div class="panel" id="panel-tools">
   <div class="tools-grid">
-    <div class="tool-card" onclick="switchTab('niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score any niche against the 5-criteria Factory formula</div></div>
+    <div class="tool-card" onclick="switchTab('command');document.getElementById('ccMenu').value='niche';ccShow('niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score any niche against the 5-criteria Factory formula</div></div>
     <div class="tool-card" onclick="switchTab('youtube')"><div class="tool-icon">▶️</div><div class="tool-name">YouTube Extractor</div><div class="tool-desc">Extract concepts from any YouTube video automatically</div></div>
     <div class="tool-card" onclick="switchTab('finance')"><div class="tool-icon">📈</div><div class="tool-name">Finance AI</div><div class="tool-desc">Market queries, stock lookup, Vault Trader status</div></div>
-    <div class="tool-card" onclick="switchTab('agent')"><div class="tool-icon">🧠</div><div class="tool-name">Brain Control</div><div class="tool-desc">Send context to the PICP agent, query the brain</div></div>
+    <div class="tool-card" onclick="switchTab('command');document.getElementById('ccMenu').value='agent';ccShow('agent')"><div class="tool-icon">🧠</div><div class="tool-name">Brain Control</div><div class="tool-desc">Send context to the PICP agent, query the brain</div></div>
     <div class="tool-card" onclick="window.open('https://claude.ai','_blank')"><div class="tool-icon">⚡</div><div class="tool-name">Open Claude</div><div class="tool-desc">Launch Claude in a new tab for working sessions</div></div>
     <div class="tool-card" onclick="window.open('https://github.com/randynutt31','_blank')"><div class="tool-icon">🐙</div><div class="tool-name">GitHub</div><div class="tool-desc">View and manage your repos</div></div>
     <div class="tool-card" onclick="window.open('https://railway.app','_blank')"><div class="tool-icon">🚂</div><div class="tool-name">Railway</div><div class="tool-desc">Monitor deployed services and logs</div></div>
@@ -1016,27 +1049,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="rt-modal-bg" id="rtModalBg"><div class="rt-modal" id="rtModal"></div></div>
 </div>
 
-<!-- MARKETING -->
-<div class="panel" id="panel-marketing">
-  <div class="card">
-    <div class="card-title">Marketing — Agent Board</div>
-    <p style="font-size:13px;color:#555;margin-bottom:14px;">Live from the Tier 3 <strong>marketing_status</strong> card. Pick a company and an as-of date to view its board.</p>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
-      <div>
-        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Company</label>
-        <select id="mktCompany" onchange="mktOnCompanyChange()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:190px;"></select>
-      </div>
-      <div>
-        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">As of</label>
-        <select id="mktDate" onchange="mktRenderBoard()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:170px;"></select>
-      </div>
-      <button class="btn btn-ghost" onclick="loadMarketing()" style="margin-top:0;">Refresh Board</button>
-    </div>
-    <div class="result" id="marketingMeta" style="margin-top:14px;"></div>
-  </div>
-  <div id="marketingBoard"></div>
-</div>
-
 <script>
 // All API calls go through our own server — no CORS issues
 async function callServer(endpoint, body) {
@@ -1060,19 +1072,30 @@ async function checkAgent() {
 }
 checkAgent();
 setInterval(checkAgent, 30000);
-// Deferred to DOMContentLoaded: loadSalesTracker() reads the `const SALES` /
-// `SALES_TOKEN` declared later in this script, so calling it eagerly here would
-// hit the const temporal-dead-zone. DOMContentLoaded fires after full parse.
-window.addEventListener('DOMContentLoaded', loadSalesTracker);
+// Sales no longer auto-loads on page/tab entry — it loads only when the Command
+// Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
 function switchTab(tab) {
-  const tabs = ['command','agent','marketing','tracker','finance','feeding','niche','youtube','tools','tier3'];
+  const tabs = ['command','finance','feeding','youtube','tools','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'feeding') rtSwitch(RT.sub);
-  if (tab === 'marketing') loadMarketing();
-  if (tab === 'command') loadSalesTracker();
+}
+
+// Command Center dropdown: gate Sales / Agent / Marketing / Tracker / Niche below
+// the project cards. Empty value ("-- Select --") hides all — the empty default.
+// Sales and Marketing load only when their option is selected (not on tab entry).
+function ccShow(val) {
+  ['cc-sales','cc-agent','cc-marketing','cc-tracker','cc-niche'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (!val) return;
+  const el = document.getElementById('cc-' + val);
+  if (el) el.style.display = 'block';
+  if (val === 'sales') loadSalesTracker();
+  if (val === 'marketing') loadMarketing();
 }
 
 // AGENT CONTROL — Tier 3 -> Tier 4 belt
