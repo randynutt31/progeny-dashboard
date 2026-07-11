@@ -1038,73 +1038,73 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Spunky</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Project Manager</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Spunky" onchange="empSave('Spunky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Spunky" onchange="empSaveDt('Spunky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Dimon</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">General Manager</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Dimon" onchange="empSave('Dimon', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Dimon" onchange="empSaveDt('Dimon', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Munger</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Destroyer</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Munger" onchange="empSave('Munger', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Munger" onchange="empSaveDt('Munger', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Leonard</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Capital Allocator</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Leonard" onchange="empSave('Leonard', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Leonard" onchange="empSaveDt('Leonard', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Brigs</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Tax Attorney</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Brigs" onchange="empSave('Brigs', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Brigs" onchange="empSaveDt('Brigs', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Siggy</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Lawyer</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Siggy" onchange="empSave('Siggy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Siggy" onchange="empSaveDt('Siggy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Deming</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Systems Engineer</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Deming" onchange="empSave('Deming', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Deming" onchange="empSaveDt('Deming', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Ogilvy</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Copywriter</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Ogilvy" onchange="empSave('Ogilvy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Ogilvy" onchange="empSaveDt('Ogilvy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Drucker</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Operations Mind</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Drucker" onchange="empSave('Drucker', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Drucker" onchange="empSaveDt('Drucker', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="N/A" selected>N/A</option><option value="YES">YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Torvalds</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Engine</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Torvalds" onchange="empSave('Torvalds', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Torvalds" onchange="empSaveDt('Torvalds', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#4ade80;font-family:inherit;font-size:13px;outline:none;"><option value="N/A">N/A</option><option value="YES" selected>YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Spolsky</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Craft</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Spolsky" onchange="empSave('Spolsky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Spolsky" onchange="empSaveDt('Spolsky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#4ade80;font-family:inherit;font-size:13px;outline:none;"><option value="N/A">N/A</option><option value="YES" selected>YES</option></select></td>
         </tr>
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Ive</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Feel</td>
           <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Ive" onchange="empSave('Ive', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
-          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="empdt-Ive" onchange="empSaveDt('Ive', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#4ade80;font-family:inherit;font-size:13px;outline:none;"><option value="N/A">N/A</option><option value="YES" selected>YES</option></select></td>
         </tr>
       </tbody>
     </table>
@@ -1178,7 +1178,13 @@ function switchTab(tab) {
 
 // EMPLOYEES tab -- static roster. Assigned Role persists in localStorage keyed by name.
 var EMP_NAMES = ['Spunky','Dimon','Munger','Leonard','Brigs','Siggy','Deming','Ogilvy','Drucker','Torvalds','Spolsky','Ive'];
+var EMP_DT_YES = { Torvalds: 1, Spolsky: 1, Ive: 1 };
 function empSave(name, value) { try { localStorage.setItem('emp_role_' + name, value); } catch (e) {} }
+function empSaveDt(name, value) {
+  try { localStorage.setItem('emp_dt_' + name, value); } catch (e) {}
+  var el = document.getElementById('empdt-' + name);
+  if (el) el.style.color = (value === 'YES' ? '#4ade80' : '#e0e0e0');
+}
 function empRestore() {
   try {
     for (var i = 0; i < EMP_NAMES.length; i++) {
@@ -1186,6 +1192,15 @@ function empRestore() {
       if (!el) continue;
       var saved = localStorage.getItem('emp_role_' + EMP_NAMES[i]);
       el.value = (saved === null ? '-' : saved);
+    }
+    for (var j = 0; j < EMP_NAMES.length; j++) {
+      var name = EMP_NAMES[j];
+      var dt = document.getElementById('empdt-' + name);
+      if (!dt) continue;
+      var savedDt = localStorage.getItem('emp_dt_' + name);
+      var def = EMP_DT_YES[name] ? 'YES' : 'N/A';
+      dt.value = (savedDt === null ? def : savedDt);
+      dt.style.color = (dt.value === 'YES' ? '#4ade80' : '#e0e0e0');
     }
   } catch (e) {}
 }
