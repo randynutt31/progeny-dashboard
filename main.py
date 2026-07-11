@@ -770,21 +770,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-title">Open Flags</div>
-    <ul class="flags-list">
-      <li><span class="flag-num">01</span>Stack orientation session required before ProgenyVault build resumes</li>
-      <li><span class="flag-num">02</span>Alpaca 2FA — Authy from App Store, unblocks Vault Trader</li>
-      <li><span class="flag-num">03</span>Resend domain verification — all three domains pending</li>
-      <li><span class="flag-num">04</span>Oregon DOR audit letter by June 30 — bring to Claude first, no action before that</li>
-      <li><span class="flag-num">05</span>Back garage door — 16" overfit unresolved</li>
-      <li><span class="flag-num">06</span>Greywater permit — Oregon DEQ, not started</li>
-      <li><span class="flag-num">07</span>Unknown AWT advisor — "master of micro business" identity unconfirmed</li>
-      <li><span class="flag-num">08</span>Third Factory niche — pending</li>
-      <li><span class="flag-num">09</span>ReptiTerra — Tropical and Tunnel Blend listing copy not written</li>
-      <li><span class="flag-num">10</span>Self-hosting review — July 7</li>
-    </ul>
-  </div>
+  <!-- Open Flags moved to Project Tracker. New panel goes here in a later task. -->
 </div>
 
 <!-- PROJECT TRACKER -->
@@ -808,6 +794,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="tracker-row"><div>Small Livestock</div><div style="color:#c9a84c;font-weight:700">38</div><div><span class="badge active">GO</span></div><div style="font-size:12px;color:#666">Fastest — PV reuse</div></div>
     <div class="tracker-row"><div>Entertainer Analytics</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$14.99/mo, stigma moat</div></div>
     <div class="tracker-row"><div>Philately</div><div style="color:#555">TBD</div><div><span class="badge backburner">Queued</span></div><div style="font-size:12px;color:#666">$19.99/mo, $3.4B market</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Open Flags</div>
+    <ul class="flags-list">
+      <li><span class="flag-num">01</span>Stack orientation session required before ProgenyVault build resumes</li>
+      <li><span class="flag-num">02</span>Alpaca 2FA — Authy from App Store, unblocks Vault Trader</li>
+      <li><span class="flag-num">03</span>Resend domain verification — all three domains pending</li>
+      <li><span class="flag-num">04</span>Oregon DOR audit letter by June 30 — bring to Claude first, no action before that</li>
+      <li><span class="flag-num">05</span>Back garage door — 16" overfit unresolved</li>
+      <li><span class="flag-num">06</span>Greywater permit — Oregon DEQ, not started</li>
+      <li><span class="flag-num">07</span>Unknown AWT advisor — "master of micro business" identity unconfirmed</li>
+      <li><span class="flag-num">08</span>Third Factory niche — pending</li>
+      <li><span class="flag-num">09</span>ReptiTerra — Tropical and Tunnel Blend listing copy not written</li>
+      <li><span class="flag-num">10</span>Self-hosting review — July 7</li>
+    </ul>
   </div>
 </div>
 
