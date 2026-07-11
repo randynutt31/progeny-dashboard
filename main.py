@@ -1137,6 +1137,17 @@ function mktAgentCard(a) {
     waiting +
     '</div>';
 }
+// Parse a record's manifest, keeping the rec.record -> JSON.parse(rec.content) fallback.
+function mktManifest(rec) {
+  let mf = rec.record;
+  if (!mf && rec.content) { try { mf = JSON.parse(rec.content); } catch(e) {} }
+  return mf;
+}
+// Slug for sorting: business field, else source_id (the upsert key is the slug).
+function mktSlug(rec) {
+  const mf = mktManifest(rec);
+  return String((mf && mf.business) || rec.source_id || '').toLowerCase();
+}
 async function loadMarketing() {
   const meta = document.getElementById('marketingMeta');
   const board = document.getElementById('marketingBoard');
@@ -1144,29 +1155,48 @@ async function loadMarketing() {
   meta.textContent = '⬤ Loading marketing board...';
   board.innerHTML = '';
   try {
-    const res = await fetch('/tier3/records?section=marketing_status&limit=1', {
+    const res = await fetch('/tier3/records?section=marketing_status&limit=100', {
       headers: {'X-API-Token': T4_TOKEN}
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Request failed');
-    const rec = (data.records || [])[0];
-    if (!rec) {
+    const recs = (data.records || []).slice();
+    if (!recs.length) {
       meta.className = 'result visible error';
       meta.textContent = 'No marketing_status card filed yet — run handoff.py with the Tier 3 push enabled.';
       return;
     }
-    let manifest = rec.record;
-    if (!manifest && rec.content) { try { manifest = JSON.parse(rec.content); } catch(e) {} }
-    if (!manifest || !Array.isArray(manifest.agents)) {
-      meta.className = 'result visible error';
-      meta.textContent = 'Card found, but it has no agent manifest to render.';
-      return;
+    // One record per company (source_id = slug via the upsert key); sort alphabetically by slug.
+    recs.sort((a, b) => mktSlug(a).localeCompare(mktSlug(b)));
+    let html = '';
+    for (const rec of recs) {
+      const manifest = mktManifest(rec);
+      const slug = (manifest && manifest.business) || rec.source_id || '';
+      // Company header: display_name -> business -> slug (this record has no `company` field).
+      const company = (manifest && manifest.display_name) || slug || 'unknown';
+      // As-of + stale from generated_at (this record has no `updated_at` field).
+      const gen = manifest && manifest.generated_at;
+      let stale = '';
+      if (gen) {
+        const t = Date.parse(gen);
+        if (!isNaN(t) && (Date.now() - t) / 86400000 > 7) {
+          stale = '<span style="display:inline-block;margin-left:8px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f87171;border:1px solid #f87171;">Stale</span>';
+        }
+      }
+      const header =
+        '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">' +
+          '<div class="card-title" style="margin-bottom:0;">' + mktEsc(company) + '</div>' +
+          '<span style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">As of ' + mktEsc(gen || '—') + '</span>' +
+          stale +
+        '</div>';
+      const body = (manifest && Array.isArray(manifest.agents))
+        ? manifest.agents.map(mktAgentCard).join('')
+        : '<div style="font-size:12px;color:#e07e7e;">Card found, but it has no agent manifest to render.</div>';
+      html += '<div style="margin-bottom:24px;">' + header + body + '</div>';
     }
     meta.className = 'result visible success';
-    meta.textContent = (manifest.display_name || manifest.business || 'marketing') +
-      '  —  card: ' + (manifest.card_status || '—') +
-      '   (generated ' + (manifest.generated_at || '—') + ')';
-    board.innerHTML = manifest.agents.map(mktAgentCard).join('');
+    meta.textContent = recs.length + (recs.length === 1 ? ' company' : ' companies') + ' · section marketing_status';
+    board.innerHTML = html;
   } catch(e) {
     meta.className = 'result visible error';
     meta.textContent = 'Error: ' + e.message;
