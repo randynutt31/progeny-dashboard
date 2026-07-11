@@ -764,9 +764,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab active" onclick="switchTab('command')">Command Center</button>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
-  <button class="nav-tab" onclick="switchTab('youtube')">YouTube Extractor</button>
-  <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <button class="nav-tab" onclick="switchTab('employees')">Employees</button>
+  <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
@@ -1009,10 +1008,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <!-- TOOLS -->
 <div class="panel" id="panel-tools">
   <div class="tools-grid">
-    <div class="tool-card" onclick="switchTab('command');document.getElementById('ccMenu').value='niche';ccShow('niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score any niche against the 5-criteria Factory formula</div></div>
     <div class="tool-card" onclick="switchTab('youtube')"><div class="tool-icon">▶️</div><div class="tool-name">YouTube Extractor</div><div class="tool-desc">Extract concepts from any YouTube video automatically</div></div>
     <div class="tool-card" onclick="switchTab('finance')"><div class="tool-icon">📈</div><div class="tool-name">Finance AI</div><div class="tool-desc">Market queries, stock lookup, Vault Trader status</div></div>
-    <div class="tool-card" onclick="switchTab('command');document.getElementById('ccMenu').value='agent';ccShow('agent')"><div class="tool-icon">🧠</div><div class="tool-name">Brain Control</div><div class="tool-desc">Send context to the PICP agent, query the brain</div></div>
     <div class="tool-card" onclick="window.open('https://claude.ai','_blank')"><div class="tool-icon">⚡</div><div class="tool-name">Open Claude</div><div class="tool-desc">Launch Claude in a new tab for working sessions</div></div>
     <div class="tool-card" onclick="window.open('https://github.com/randynutt31','_blank')"><div class="tool-icon">🐙</div><div class="tool-name">GitHub</div><div class="tool-desc">View and manage your repos</div></div>
     <div class="tool-card" onclick="window.open('https://railway.app','_blank')"><div class="tool-icon">🚂</div><div class="tool-name">Railway</div><div class="tool-desc">Monitor deployed services and logs</div></div>
@@ -1168,7 +1165,7 @@ setInterval(checkAgent, 30000);
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
 function switchTab(tab) {
-  const tabs = ['command','finance','feeding','youtube','tools','employees','tier3'];
+  const tabs = ['command','finance','feeding','employees','tools','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
