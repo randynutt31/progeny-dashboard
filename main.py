@@ -702,6 +702,52 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   #panel-feeding .rt-modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:500; align-items:center; justify-content:center; padding:16px; }
   #panel-feeding .rt-modal-bg.open { display:flex; }
   #panel-feeding .rt-modal { background:var(--rt-card); border:1px solid var(--rt-border); border-radius:12px; padding:20px; max-width:420px; width:100%; max-height:88vh; overflow-y:auto; }
+  /* ── Sales Tracker (renders on Command Center) — scoped tokens, square corners ── */
+  #panel-command .st { --st-bg:#0e0f12; --st-card:#15161b; --st-raised:#1b1d24; --st-border:#26282f; --st-gold:#c9a84c; --st-text:#e8e6df; --st-muted:#7a7e89; --st-dim:#50545f; --st-pos:#4ade80; --st-neg:#f87171;
+    background:var(--st-bg); border:1px solid var(--st-border); color:var(--st-text); margin-top:22px; font-variant-numeric:tabular-nums; }
+  #panel-command .st * { box-sizing:border-box; }
+  #panel-command .st-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:16px 20px; border-bottom:1px solid var(--st-border); }
+  #panel-command .st-title { font-size:15px; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:var(--st-text); }
+  #panel-command .st-asof { font-size:11px; color:var(--st-muted); text-transform:uppercase; letter-spacing:1px; margin-left:12px; }
+  #panel-command .st-stale { display:inline-block; margin-left:8px; padding:2px 8px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--st-neg); border:1px solid var(--st-neg); }
+  #panel-command .st-toggle { display:flex; border:1px solid var(--st-border); }
+  #panel-command .st-toggle button { background:transparent; border:none; border-left:1px solid var(--st-border); color:var(--st-muted); font-family:inherit; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; padding:8px 14px; cursor:pointer; }
+  #panel-command .st-toggle button:first-child { border-left:none; }
+  #panel-command .st-toggle button.active { background:var(--st-raised); color:var(--st-gold); }
+  #panel-command .st-body { padding:18px 20px; }
+  #panel-command .st-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+  @media (max-width:820px) { #panel-command .st-kpis { grid-template-columns:repeat(2,1fr); } }
+  #panel-command .st-kpi { background:var(--st-card); border:1px solid var(--st-border); padding:14px 16px; }
+  #panel-command .st-kpi-lab { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--st-muted); margin-bottom:8px; }
+  #panel-command .st-kpi-val { font-size:24px; font-weight:700; color:var(--st-text); line-height:1.1; }
+  #panel-command .st-kpi-sub { font-size:11px; margin-top:6px; color:var(--st-dim); }
+  #panel-command .st-switch { display:flex; flex-wrap:wrap; gap:2px; margin-bottom:16px; border:1px solid var(--st-border); width:fit-content; }
+  #panel-command .st-switch button { background:transparent; border:none; color:var(--st-muted); font-family:inherit; font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; padding:7px 13px; cursor:pointer; }
+  #panel-command .st-switch button.active { background:var(--st-gold); color:#0e0f12; }
+  #panel-command .st-scroll { overflow-x:auto; }
+  #panel-command table.st-matrix { border-collapse:collapse; width:100%; font-size:12px; }
+  #panel-command .st-matrix th, #panel-command .st-matrix td { border:1px solid var(--st-border); padding:7px 10px; text-align:right; white-space:nowrap; }
+  #panel-command .st-matrix thead th { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--st-muted); font-weight:600; background:var(--st-raised); }
+  #panel-command .st-matrix th.st-co, #panel-command .st-matrix td.st-co { text-align:left; color:var(--st-text); }
+  #panel-command .st-matrix .st-cur { color:var(--st-gold) !important; }
+  #panel-command .st-matrix tr.st-clickable { cursor:pointer; }
+  #panel-command .st-matrix tr.st-clickable:hover td { background:var(--st-raised); }
+  #panel-command .st-matrix tr.st-total td { border-top:2px solid var(--st-gold); font-weight:700; color:var(--st-text); background:var(--st-card); }
+  #panel-command .st-dot { display:inline-block; width:8px; height:8px; margin-right:7px; vertical-align:middle; }
+  #panel-command .st-mom-pos { color:var(--st-pos); }
+  #panel-command .st-mom-neg { color:var(--st-neg); }
+  #panel-command .st-mom-flat { color:var(--st-dim); }
+  #panel-command .st-book { background:var(--st-bg); }
+  #panel-command .st-book td { padding:0 !important; border:1px solid var(--st-border) !important; }
+  #panel-command table.st-sub { border-collapse:collapse; width:100%; font-size:11px; }
+  #panel-command .st-sub th, #panel-command .st-sub td { border:1px solid var(--st-border); padding:6px 10px; text-align:right; white-space:nowrap; }
+  #panel-command .st-sub th { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--st-muted); font-weight:600; }
+  #panel-command .st-sub th.st-co, #panel-command .st-sub td.st-co { text-align:left; color:var(--st-muted); }
+  #panel-command .st-cons-chart { background:var(--st-card); border:1px solid var(--st-border); padding:16px; margin-bottom:16px; }
+  #panel-command .st-legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:var(--st-muted); }
+  #panel-command .st-legend span { display:inline-flex; align-items:center; gap:6px; }
+  #panel-command .st-msg { padding:24px; text-align:center; color:var(--st-muted); font-size:13px; }
+  #panel-command .st-msg.err { color:var(--st-neg); }
 </style>
 </head>
 <body>
@@ -770,7 +816,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
     </div>
   </div>
-  <!-- Open Flags moved to Project Tracker. New panel goes here in a later task. -->
+  <!-- SALES TRACKER — renders on Command Center. Reads Tier 3 section sales_status. -->
+  <div class="st" id="salesTracker">
+    <div class="st-head">
+      <div>
+        <span class="st-title">Sales</span>
+        <span class="st-asof" id="stAsOf"></span>
+      </div>
+      <div class="st-toggle" id="stToggle">
+        <button class="active" onclick="salesSetView('books')">Tier 3 · Books</button>
+        <button onclick="salesSetView('consolidated')">Tier 4 · Consolidated</button>
+      </div>
+    </div>
+    <div class="st-body" id="stBody">
+      <div class="st-msg" id="stMsg">Loading sales…</div>
+    </div>
+  </div>
 </div>
 
 <!-- PROJECT TRACKER -->
@@ -989,6 +1050,7 @@ async function checkAgent() {
 }
 checkAgent();
 setInterval(checkAgent, 30000);
+loadSalesTracker();
 
 function switchTab(tab) {
   const tabs = ['command','agent','marketing','tracker','finance','feeding','niche','youtube','tools','tier3'];
@@ -997,6 +1059,7 @@ function switchTab(tab) {
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'feeding') rtSwitch(RT.sub);
   if (tab === 'marketing') loadMarketing();
+  if (tab === 'command') loadSalesTracker();
 }
 
 // AGENT CONTROL — Tier 3 -> Tier 4 belt
@@ -1105,6 +1168,256 @@ async function loadMarketing() {
     meta.className = 'result visible error';
     meta.textContent = 'Error: ' + e.message;
   }
+}
+
+// ═══════════════ SALES TRACKER (Command Center) ═══════════════
+// Reads Tier 3 section sales_status via /tier3/records. Two views off the same
+// records: Tier 3 Books (per-company matrix) and Tier 4 Consolidated (aggregation).
+const SALES_TOKEN = 'RT_DASH_7f39c2a4b8e15d60';
+const SALES_METRICS = [
+  {key:'revenue',   label:'Revenue',   money:true},
+  {key:'mrr',       label:'MRR',       money:true},
+  {key:'customers', label:'Customers'},
+  {key:'new',       label:'New'},
+  {key:'churned',   label:'Churned',   invert:true},
+  {key:'units',     label:'Units'}
+];
+const SALES_COLORS = { progenyvault:'#c9a84c', reptiterra:'#e85d2f', denofindigos:'#5b8def' };
+const SALES_MIX = [
+  {slug:'progenyvault', code:'PV'},
+  {slug:'reptiterra',   code:'RTL'},
+  {slug:'denofindigos', code:'DOI'}
+];
+const SALES = { view:'books', metric:'revenue', expanded:{}, companies:[], periods:[], idx:{}, names:{}, status:{}, newestUpd:null, loaded:false };
+
+function stEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function stColor(slug){ return SALES_COLORS[slug] || '#7a7e89'; }
+function stFmt(metric, v){
+  if (v==null || v==='') return '—';
+  const n = Number(v);
+  if (isNaN(n)) return '—';
+  if (metric && metric.money) return '$' + Math.round(n).toLocaleString('en-US');
+  return Math.round(n).toLocaleString('en-US');
+}
+function stVal(slug, period, key){
+  const rec = SALES.idx[slug] && SALES.idx[slug][period];
+  if (!rec) return null;
+  const v = rec[key];
+  return (v==null || v==='') ? null : Number(v);
+}
+function stTotal(period, key){
+  let sum=0, any=false;
+  for (const s of SALES.companies){ const v = stVal(s,period,key); if (v!=null){ sum+=v; any=true; } }
+  return any ? sum : null;
+}
+function stMoM(cur, prev, invert){
+  if (cur==null || prev==null || prev===0) return {text:'—', cls:'st-mom-flat'};
+  const pct = (cur-prev)/Math.abs(prev)*100;
+  let dir = pct>0?1:(pct<0?-1:0);
+  if (invert) dir = -dir;
+  const cls = dir>0?'st-mom-pos':(dir<0?'st-mom-neg':'st-mom-flat');
+  return {pct, cls, text:(pct>0?'+':'')+pct.toFixed(1)+'%'};
+}
+function stHeat(v, rowMax){
+  if (v==null || !rowMax) return '';
+  const a = Math.max(0, Math.min(0.82, Math.abs(v)/rowMax*0.82));
+  return 'background:rgba(201,168,76,'+a.toFixed(3)+');';
+}
+function stSpark(vals, color){
+  const nums = vals.map(v => v==null?null:Number(v));
+  const present = nums.filter(v => v!=null);
+  const w=78, h=22, pad=2;
+  if (present.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
+  const max = Math.max.apply(null, present), min = Math.min.apply(null, present);
+  const span = (max-min) || 1;
+  const n = nums.length;
+  const pts = [];
+  nums.forEach((v,i) => {
+    if (v==null) return;
+    const x = pad + (n===1?0:(i/(n-1))*(w-2*pad));
+    const y = h-pad - ((v-min)/span)*(h-2*pad);
+    pts.push(x.toFixed(1)+','+y.toFixed(1));
+  });
+  return `<svg width="${w}" height="${h}" style="display:block"><polyline fill="none" stroke="${color}" stroke-width="1.5" points="${pts.join(' ')}"/></svg>`;
+}
+
+function salesSetView(v){ SALES.view=v; salesRender(); }
+function salesSetMetric(m){ SALES.metric=m; salesRender(); }
+function salesToggleRow(slug){ SALES.expanded[slug] = !SALES.expanded[slug]; salesRender(); }
+
+async function loadSalesTracker(){
+  const msg = document.getElementById('stMsg');
+  if (msg && !SALES.loaded){ msg.className='st-msg'; msg.textContent='Loading sales…'; }
+  try {
+    const res = await fetch('/tier3/records?section=sales_status&limit=500', { headers:{'X-API-Token':SALES_TOKEN} });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Request failed');
+    const recs = data.records || [];
+    const idx={}, names={}, status={}, periodSet={}, coOrder=[];
+    let newestUpd=null;
+    for (const r of recs){
+      let p = r.record;
+      if (!p && r.content){ try { p = JSON.parse(r.content); } catch(e){} }
+      if (!p || !p.slug || !p.period) continue;
+      const slug=p.slug, period=p.period;
+      if (!idx[slug]){ idx[slug]={}; coOrder.push(slug); }
+      idx[slug][period] = p;
+      if (!names[slug]) names[slug] = p.company || slug;
+      if (p.status) status[slug] = p.status;
+      periodSet[period] = true;
+      if (p.updated_at){ const t = Date.parse(p.updated_at); if (!isNaN(t) && (newestUpd==null || t>newestUpd)) newestUpd = t; }
+    }
+    const periods = Object.keys(periodSet).sort();
+    const known = SALES_MIX.map(m => m.slug);
+    const companies = known.filter(s => idx[s]).concat(coOrder.filter(s => known.indexOf(s)<0));
+    SALES.idx=idx; SALES.names=names; SALES.status=status; SALES.periods=periods; SALES.companies=companies;
+    SALES.newestUpd=newestUpd; SALES.loaded=true;
+    salesRender();
+  } catch(e){
+    const body = document.getElementById('stBody');
+    if (body) body.innerHTML = '<div class="st-msg err">Error: ' + stEsc(e.message) + '</div>';
+  }
+}
+
+function salesRender(){
+  const tog = document.getElementById('stToggle');
+  if (tog){ const b = tog.querySelectorAll('button'); b[0].classList.toggle('active', SALES.view==='books'); b[1].classList.toggle('active', SALES.view==='consolidated'); }
+  const asOf = document.getElementById('stAsOf');
+  const cur = SALES.periods.length ? SALES.periods[SALES.periods.length-1] : null;
+  if (asOf){
+    let h = cur ? ('As of ' + stEsc(cur)) : 'No data';
+    if (SALES.newestUpd!=null && (Date.now()-SALES.newestUpd)/86400000 > 7) h += ' <span class="st-stale">Stale</span>';
+    asOf.innerHTML = h;
+  }
+  const body = document.getElementById('stBody');
+  if (!body) return;
+  if (!SALES.periods.length || !SALES.companies.length){
+    body.innerHTML = '<div class="st-msg">No sales_status records yet. Push a record to populate the tracker.</div>';
+    return;
+  }
+  body.innerHTML = salesKpis() + salesSwitcher() + (SALES.view==='books' ? salesBooks() : salesConsolidated());
+}
+
+function salesKpis(){
+  const periods = SALES.periods;
+  const cur = periods[periods.length-1];
+  const prev = periods.length>1 ? periods[periods.length-2] : null;
+  const money = {money:true}, plain = {};
+  const revCur = stTotal(cur,'revenue'), revPrev = prev?stTotal(prev,'revenue'):null;
+  const rMoM = stMoM(revCur, revPrev, false);
+  const pvCur = stVal('progenyvault',cur,'mrr'), pvPrev = prev?stVal('progenyvault',prev,'mrr'):null;
+  const pvMoM = stMoM(pvCur, pvPrev, false);
+  const custCur = stTotal(cur,'customers');
+  let netNew=0, hasNN=false;
+  for (const s of SALES.companies){ const n=stVal(s,cur,'new'), c=stVal(s,cur,'churned'); if(n!=null){netNew+=n;hasNN=true;} if(c!=null){netNew-=c;hasNN=true;} }
+  const nn = hasNN ? ((netNew>=0?'+':'')+netNew.toLocaleString('en-US')+' net new') : '—';
+  let mover=null;
+  if (prev){
+    for (const s of SALES.companies){
+      const c=stVal(s,cur,'revenue'), p=stVal(s,prev,'revenue');
+      if (c==null||p==null||p===0) continue;
+      const pct=(c-p)/Math.abs(p)*100;
+      if (!mover || pct>mover.pct) mover={slug:s, pct};
+    }
+  }
+  let moverTxt='—';
+  if (mover){ const mm=SALES_MIX.find(x=>x.slug===mover.slug); const code=mm?mm.code:(SALES.names[mover.slug]||mover.slug); moverTxt = stEsc(code)+' '+(mover.pct>0?'+':'')+mover.pct.toFixed(1)+'%'; }
+  const kpi = (lab,val,sub,cls) => `<div class="st-kpi"><div class="st-kpi-lab">${lab}</div><div class="st-kpi-val">${val}</div><div class="st-kpi-sub ${cls||''}">${sub}</div></div>`;
+  return `<div class="st-kpis">
+    ${kpi('Portfolio Revenue', stFmt(money,revCur), rMoM.text+' MoM', rMoM.cls)}
+    ${kpi('PV MRR', stFmt(money,pvCur), pvMoM.text+' MoM', pvMoM.cls)}
+    ${kpi('Portfolio Customers', stFmt(plain,custCur), nn)}
+    ${kpi('Top Mover', moverTxt, 'best revenue MoM')}
+  </div>`;
+}
+
+function salesSwitcher(){
+  return '<div class="st-switch">' + SALES_METRICS.map(m =>
+    `<button class="${m.key===SALES.metric?'active':''}" onclick="salesSetMetric('${m.key}')">${m.label}</button>`
+  ).join('') + '</div>';
+}
+
+function salesBooks(){
+  const m = SALES_METRICS.find(x=>x.key===SALES.metric);
+  const periods = SALES.periods;
+  const cur = periods[periods.length-1];
+  const prev = periods.length>1?periods[periods.length-2]:null;
+  let head = '<tr><th class="st-co">Company</th>';
+  for (const per of periods) head += `<th class="${per===cur?'st-cur':''}">${stEsc(per)}</th>`;
+  head += '<th>MoM</th><th>Trend</th></tr>';
+  let rows='';
+  for (const slug of SALES.companies){
+    const vals = periods.map(per => stVal(slug,per,m.key));
+    const rowMax = Math.max.apply(null, [0].concat(vals.filter(v=>v!=null).map(v=>Math.abs(v))));
+    let cells='';
+    periods.forEach((per,i) => { cells += `<td class="${per===cur?'st-cur':''}" style="${stHeat(vals[i],rowMax)}">${stFmt(m,vals[i])}</td>`; });
+    const mom = stMoM(stVal(slug,cur,m.key), prev?stVal(slug,prev,m.key):null, m.invert);
+    const color = stColor(slug);
+    rows += `<tr class="st-clickable" onclick="salesToggleRow('${slug}')">
+      <td class="st-co"><span class="st-dot" style="background:${color}"></span>${stEsc(SALES.names[slug]||slug)}</td>
+      ${cells}<td class="${mom.cls}">${mom.text}</td><td>${stSpark(vals,color)}</td></tr>`;
+    if (SALES.expanded[slug]) rows += `<tr class="st-book"><td colspan="${periods.length+3}">${salesBook(slug)}</td></tr>`;
+  }
+  const totVals = periods.map(per => stTotal(per,m.key));
+  let totCells='';
+  periods.forEach((per,i) => { totCells += `<td class="${per===cur?'st-cur':''}">${stFmt(m,totVals[i])}</td>`; });
+  const totMom = stMoM(stTotal(cur,m.key), prev?stTotal(prev,m.key):null, m.invert);
+  rows += `<tr class="st-total"><td class="st-co">Portfolio Total</td>${totCells}<td class="${totMom.cls}">${totMom.text}</td><td>${stSpark(totVals,'#c9a84c')}</td></tr>`;
+  return `<div class="st-scroll"><table class="st-matrix"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function salesBook(slug){
+  const periods = SALES.periods;
+  const cur = periods[periods.length-1];
+  const prev = periods.length>1?periods[periods.length-2]:null;
+  let head = '<tr><th class="st-co">Metric</th>';
+  for (const per of periods) head += `<th class="${per===cur?'st-cur':''}">${stEsc(per)}</th>`;
+  head += '<th>MoM</th></tr>';
+  let rows='';
+  for (const met of SALES_METRICS){
+    let cells='';
+    periods.forEach(per => { cells += `<td class="${per===cur?'st-cur':''}">${stFmt(met, stVal(slug,per,met.key))}</td>`; });
+    const mom = stMoM(stVal(slug,cur,met.key), prev?stVal(slug,prev,met.key):null, met.invert);
+    rows += `<tr><td class="st-co">${met.label}</td>${cells}<td class="${mom.cls}">${mom.text}</td></tr>`;
+  }
+  return `<div class="st-scroll"><table class="st-sub"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function salesConsolidated(){
+  const m = SALES_METRICS.find(x=>x.key===SALES.metric);
+  const periods = SALES.periods;
+  const cur = periods[periods.length-1];
+  const totals = periods.map(per => { let sum=0; for (const s of SALES.companies){ const v=stVal(s,per,m.key); if(v!=null&&v>0) sum+=v; } return sum; });
+  const maxTot = Math.max.apply(null, [1].concat(totals));
+  const W = Math.max(320, periods.length*64), H=180, padB=26, padT=10, padL=8;
+  const step = (W-padL*2)/periods.length, bw = step*0.55;
+  let bars='';
+  periods.forEach((per,i) => {
+    const cx = padL + (i+0.5)*step;
+    let y = H-padB;
+    for (const s of SALES.companies){
+      const v = stVal(s,per,m.key);
+      if (v==null || v<=0) continue;
+      const hh = (v/maxTot)*(H-padB-padT);
+      y -= hh;
+      bars += `<rect x="${(cx-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" fill="${stColor(s)}"></rect>`;
+    }
+    bars += `<text x="${cx.toFixed(1)}" y="${H-padB+14}" fill="#7a7e89" font-size="9" text-anchor="middle">${stEsc(per.slice(5))}</text>`;
+  });
+  const svg = `<svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;max-width:100%">${bars}</svg>`;
+  const legend = SALES.companies.map(s => `<span><span class="st-dot" style="background:${stColor(s)}"></span>${stEsc(SALES.names[s]||s)}</span>`).join('');
+  let rows='';
+  periods.slice().reverse().forEach(per => {
+    const tot = stTotal(per,m.key);
+    const pi = periods.indexOf(per);
+    const pv = pi>0 ? stTotal(periods[pi-1], m.key) : null;
+    const mom = stMoM(tot, pv, m.invert);
+    const mix = SALES_MIX.map(mm => { const v=stVal(mm.slug,per,m.key); if(v==null||tot==null||tot===0) return '—'; return (v/tot*100).toFixed(1)+'%'; });
+    rows += `<tr class="${per===cur?'st-total':''}"><td class="st-co">${stEsc(per)}</td><td>${stFmt(m,tot)}</td><td class="${mom.cls}">${mom.text}</td><td>${mix[0]}</td><td>${mix[1]}</td><td>${mix[2]}</td></tr>`;
+  });
+  const thead = '<tr><th class="st-co">Month</th><th>Total</th><th>MoM</th><th>PV mix</th><th>RTL mix</th><th>DOI mix</th></tr>';
+  return `<div class="st-cons-chart">${svg}<div class="st-legend">${legend}</div></div>
+    <div class="st-scroll"><table class="st-matrix"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // NICHE SCORER
