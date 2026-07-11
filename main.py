@@ -1050,7 +1050,10 @@ async function checkAgent() {
 }
 checkAgent();
 setInterval(checkAgent, 30000);
-loadSalesTracker();
+// Deferred to DOMContentLoaded: loadSalesTracker() reads the `const SALES` /
+// `SALES_TOKEN` declared later in this script, so calling it eagerly here would
+// hit the const temporal-dead-zone. DOMContentLoaded fires after full parse.
+window.addEventListener('DOMContentLoaded', loadSalesTracker);
 
 function switchTab(tab) {
   const tabs = ['command','agent','marketing','tracker','finance','feeding','niche','youtube','tools','tier3'];
