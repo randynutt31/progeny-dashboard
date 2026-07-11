@@ -822,7 +822,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <option value="marketing">Marketing</option>
       <option value="tracker">Project Tracker</option>
       <option value="niche">Niche Scorer</option>
-      <option value="employees">Employees</option>
     </select>
   </div>
 
@@ -957,24 +956,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
     </div>
   </div>
-
-  <!-- CC: EMPLOYEES -->
-  <div id="cc-employees" style="display:none;margin-top:18px;">
-    <div class="card">
-      <div class="card-title">Employees</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="text-align:left;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">
-            <th style="padding:8px 10px;border-bottom:1px solid #222;">Name</th>
-            <th style="padding:8px 10px;border-bottom:1px solid #222;">Natural Role</th>
-            <th style="padding:8px 10px;border-bottom:1px solid #222;">Assigned Role</th>
-            <th style="padding:8px 10px;border-bottom:1px solid #222;">Design Team</th>
-          </tr>
-        </thead>
-        <tbody id="empBody"></tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
 <!-- YOUTUBE EXTRACTOR -->
@@ -1106,7 +1087,7 @@ function switchTab(tab) {
 // the project cards. Empty value ("-- Select --") hides all — the empty default.
 // Sales and Marketing load only when their option is selected (not on tab entry).
 function ccShow(val) {
-  ['cc-sales','cc-agent','cc-marketing','cc-tracker','cc-niche','cc-employees'].forEach(id => {
+  ['cc-sales','cc-agent','cc-marketing','cc-tracker','cc-niche'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -1115,48 +1096,6 @@ function ccShow(val) {
   if (el) el.style.display = 'block';
   if (val === 'sales') loadSalesTracker();
   if (val === 'marketing') loadMarketing();
-  if (val === 'employees') loadEmployees();
-}
-
-// EMPLOYEES — fixed roster. Name + Natural Role read-only; Assigned Role persists
-// in localStorage keyed to employee name; Design Team is locked (Torvalds/Spolsky/Ive).
-const EMP_ROSTER = [
-  { name: 'Spunky',   natural: 'Project Manager',   design: false },
-  { name: 'Dimon',    natural: 'General Manager',   design: false },
-  { name: 'Munger',   natural: 'The Destroyer',     design: false },
-  { name: 'Leonard',  natural: 'Capital Allocator', design: false },
-  { name: 'Brigs',    natural: 'Tax Attorney',      design: false },
-  { name: 'Siggy',    natural: 'Lawyer',            design: false },
-  { name: 'Deming',   natural: 'Systems Engineer',  design: false },
-  { name: 'Ogilvy',   natural: 'Copywriter',        design: false },
-  { name: 'Drucker',  natural: 'Operations Mind',   design: false },
-  { name: 'Torvalds', natural: 'The Engine',        design: true  },
-  { name: 'Spolsky',  natural: 'The Craft',         design: true  },
-  { name: 'Ive',      natural: 'The Feel',          design: true  },
-];
-const EMP_ROLES = ['Sales','Marketing','Operations','Legal','Tax','Engineering','Systems','Copywriting','Capital','—'];
-function empKey(name) { return 'emp_role_' + name; }
-function empSave(name, val) { localStorage.setItem(empKey(name), val); }
-function loadEmployees() {
-  const body = document.getElementById('empBody');
-  if (!body) return;
-  body.innerHTML = EMP_ROSTER.map(e => {
-    const saved = localStorage.getItem(empKey(e.name)) || '—';
-    const opts = EMP_ROLES.map(r => '<option value="' + r + '"' + (r === saved ? ' selected' : '') + '>' + r + '</option>').join('');
-    const design = e.design
-      ? '<span style="color:#4caf50;font-weight:700;">✓</span>'
-      : '<span style="color:#444;">N/A</span>';
-    return '<tr>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;font-weight:600;">' + e.name + '</td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;color:#888;">' + e.natural + '</td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;">' +
-        '<select onchange="empSave(\'' + e.name + '\', this.value)" ' +
-          'style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;">' +
-          opts +
-        '</select></td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;">' + design + '</td>' +
-      '</tr>';
-  }).join('');
 }
 
 // AGENT CONTROL — Tier 3 -> Tier 4 belt
