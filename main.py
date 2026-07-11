@@ -1142,7 +1142,7 @@ function mktAgentCard(a) {
     : '<div style="font-size:12px;color:#4caf50;margin-top:10px;">✓ nothing outstanding</div>';
   return '<div class="project-card" style="margin-bottom:12px;">' +
     '<div class="project-name">' + mktEsc(a.agent) + '</div>' +
-    '<div class="project-status" style="color:#888;">last run: ' + mktEsc(a.last_run || '—') + '</div>' +
+    '<div class="project-status" style="color:#888;">last run: ' + mktEsc(a.last_run ? mktHumanDateTime(a.last_run) : '—') + '</div>' +
     '<div style="margin-top:10px;">' + produced + '</div>' +
     waiting +
     '</div>';
@@ -1166,6 +1166,22 @@ function mktHumanDate(ymd) {
   const mi = parseInt(p[1], 10) - 1;
   if (isNaN(mi) || mi < 0 || mi > 11) return String(ymd);
   return months[mi] + ' ' + parseInt(p[2], 10) + ', ' + p[0];
+}
+
+// ISO timestamp -> "Jul 10, 2026, 7:32 PM" (keeps time-of-day, no raw ISO on the tab).
+// Parsed positionally from the string to avoid browser-local timezone drift.
+function mktHumanDateTime(iso) {
+  if (!iso) return '—';
+  const s = String(iso);
+  const ymd = s.slice(0, 10);
+  const d = mktHumanDate(ymd);
+  if (d === ymd) return s;                 // not date-prefixed -> return as-is (rare)
+  const hStr = s.slice(11, 13), mStr = s.slice(14, 16);
+  const h = parseInt(hStr, 10), mnum = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(mnum) || hStr.length < 2 || mStr.length < 2) return d;  // date only
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let hr = h % 12; if (hr === 0) hr = 12;
+  return d + ', ' + hr + ':' + mStr + ' ' + ampm;
 }
 
 async function loadMarketing() {
