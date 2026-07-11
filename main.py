@@ -766,6 +766,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
   <button class="nav-tab" onclick="switchTab('youtube')">YouTube Extractor</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
+  <button class="nav-tab" onclick="switchTab('employees')">Employees</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
@@ -1019,6 +1020,97 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- EMPLOYEES -->
+<div class="panel" id="panel-employees">
+  <div class="card">
+    <div class="card-title">Employees</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;color:#e0e0e0;">
+      <thead>
+        <tr style="text-align:left;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">
+          <th style="padding:8px 10px;border-bottom:1px solid #222;">Name</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #222;">Natural Role</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #222;">Assigned Role</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #222;">Design Team</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Spunky</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Project Manager</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Spunky" onchange="empSave('Spunky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Dimon</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">General Manager</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Dimon" onchange="empSave('Dimon', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Munger</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Destroyer</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Munger" onchange="empSave('Munger', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Leonard</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Capital Allocator</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Leonard" onchange="empSave('Leonard', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Brigs</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Tax Attorney</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Brigs" onchange="empSave('Brigs', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Siggy</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Lawyer</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Siggy" onchange="empSave('Siggy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Deming</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Systems Engineer</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Deming" onchange="empSave('Deming', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Ogilvy</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Copywriter</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Ogilvy" onchange="empSave('Ogilvy', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Drucker</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">Operations Mind</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Drucker" onchange="empSave('Drucker', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">N/A</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Torvalds</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Engine</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Torvalds" onchange="empSave('Torvalds', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Spolsky</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Craft</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Spolsky" onchange="empSave('Spolsky', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;font-weight:600;">Ive</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#888;">The Feel</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;"><select id="emp-Ive" onchange="empSave('Ive', this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;"><option value="-" selected>-</option><option value="Sales">Sales</option><option value="Marketing">Marketing</option><option value="Operations">Operations</option><option value="Legal">Legal</option><option value="Tax">Tax</option><option value="Engineering">Engineering</option><option value="Systems">Systems</option><option value="Copywriting">Copywriting</option><option value="Capital">Capital</option></select></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #222;color:#4ade80;font-weight:600;">YES</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- REPTITERRA FEEDING -->
 <div class="panel" id="panel-feeding">
   <div class="rt-wrap">
@@ -1076,11 +1168,26 @@ setInterval(checkAgent, 30000);
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
 function switchTab(tab) {
-  const tabs = ['command','finance','feeding','youtube','tools','tier3'];
+  const tabs = ['command','finance','feeding','youtube','tools','employees','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'feeding') rtSwitch(RT.sub);
+  if (tab === 'employees') empRestore();
+}
+
+// EMPLOYEES tab -- static roster. Assigned Role persists in localStorage keyed by name.
+var EMP_NAMES = ['Spunky','Dimon','Munger','Leonard','Brigs','Siggy','Deming','Ogilvy','Drucker','Torvalds','Spolsky','Ive'];
+function empSave(name, value) { try { localStorage.setItem('emp_role_' + name, value); } catch (e) {} }
+function empRestore() {
+  try {
+    for (var i = 0; i < EMP_NAMES.length; i++) {
+      var el = document.getElementById('emp-' + EMP_NAMES[i]);
+      if (!el) continue;
+      var saved = localStorage.getItem('emp_role_' + EMP_NAMES[i]);
+      el.value = (saved === null ? '-' : saved);
+    }
+  } catch (e) {}
 }
 
 // Command Center dropdown: gate Sales / Agent / Marketing / Tracker / Niche below
