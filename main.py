@@ -1147,14 +1147,14 @@ function loadEmployees() {
       ? '<span style="color:#4caf50;font-weight:700;">✓</span>'
       : '<span style="color:#444;">N/A</span>';
     return '<tr>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;font-weight:600;">' + e.name + '</td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;color:#888;">' + e.natural + '</td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;">' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #2a2d35;font-weight:600;color:#e0e0e0;">' + e.name + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #2a2d35;color:#aaa;">' + e.natural + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #2a2d35;">' +
         '<select onchange="empSave(\'' + e.name + '\', this.value)" ' +
           'style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:6px 8px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;">' +
           opts +
         '</select></td>' +
-      '<td style="padding:8px 10px;border-bottom:1px solid #161616;">' + design + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #2a2d35;">' + design + '</td>' +
       '</tr>';
   }).join('');
 }
