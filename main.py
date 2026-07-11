@@ -1020,8 +1020,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <div class="panel" id="panel-marketing">
   <div class="card">
     <div class="card-title">Marketing — Agent Board</div>
-    <p style="font-size:13px;color:#555;margin-bottom:14px;">Live from the Tier 3 <strong>marketing_status</strong> card. Per agent: last run, what it produced, and what it's waiting on.</p>
-    <button class="btn btn-ghost" onclick="loadMarketing()">Refresh Board</button>
+    <p style="font-size:13px;color:#555;margin-bottom:14px;">Live from the Tier 3 <strong>marketing_status</strong> card. Pick a company and an as-of date to view its board.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+      <div>
+        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Company</label>
+        <select id="mktCompany" onchange="mktOnCompanyChange()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:190px;"></select>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">As of</label>
+        <select id="mktDate" onchange="mktRenderBoard()" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:170px;"></select>
+      </div>
+      <button class="btn btn-ghost" onclick="loadMarketing()" style="margin-top:0;">Refresh Board</button>
+    </div>
     <div class="result" id="marketingMeta" style="margin-top:14px;"></div>
   </div>
   <div id="marketingBoard"></div>
@@ -1143,64 +1153,146 @@ function mktManifest(rec) {
   if (!mf && rec.content) { try { mf = JSON.parse(rec.content); } catch(e) {} }
   return mf;
 }
-// Slug for sorting: business field, else source_id (the upsert key is the slug).
-function mktSlug(rec) {
-  const mf = mktManifest(rec);
-  return String((mf && mf.business) || rec.source_id || '').toLowerCase();
+// Selector-model state. Records grouped by company slug; each company holds
+// dated snapshots. The Company + As-of dropdowns pick which single board renders.
+const MKT = { byCompany: {}, order: [], selCompany: null, selDate: null };
+
+// "YYYY-MM-DD" -> "Jul 10, 2026". Parsed by parts to avoid timezone drift; no ISO shown.
+function mktHumanDate(ymd) {
+  if (!ymd) return '—';
+  const p = String(ymd).split('-');
+  if (p.length !== 3) return String(ymd);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mi = parseInt(p[1], 10) - 1;
+  if (isNaN(mi) || mi < 0 || mi > 11) return String(ymd);
+  return months[mi] + ' ' + parseInt(p[2], 10) + ', ' + p[0];
 }
+
 async function loadMarketing() {
   const meta = document.getElementById('marketingMeta');
   const board = document.getElementById('marketingBoard');
+  const coSel = document.getElementById('mktCompany');
+  const dateSel = document.getElementById('mktDate');
+  const prevCompany = MKT.selCompany, prevDate = MKT.selDate;   // preserve across refresh
   meta.className = 'result visible';
   meta.textContent = '⬤ Loading marketing board...';
-  board.innerHTML = '';
   try {
-    const res = await fetch('/tier3/records?section=marketing_status&limit=100', {
+    const res = await fetch('/tier3/records?section=marketing_status&limit=500', {
       headers: {'X-API-Token': T4_TOKEN}
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Request failed');
-    const recs = (data.records || []).slice();
-    if (!recs.length) {
+    const recs = data.records || [];
+    const byCompany = {};
+    for (const rec of recs) {
+      const manifest = mktManifest(rec);
+      const sid = String(rec.source_id || '');
+      const ci = sid.indexOf(':');
+      // source_id: "{slug}" (legacy) or "{slug}:{YYYY-MM-DD}" (dated).
+      const slug = (ci >= 0 ? sid.slice(0, ci) : sid) || (manifest && manifest.business) || '';
+      if (!slug) continue;
+      const gen = manifest && manifest.generated_at;
+      // Dated record -> date from source_id; legacy -> date part of generated_at.
+      const date = ci >= 0 ? sid.slice(ci + 1) : (gen ? String(gen).slice(0, 10) : null);
+      if (!date) continue;
+      const ts = gen ? Date.parse(gen) : Date.parse(date + 'T00:00:00Z');
+      if (!byCompany[slug]) byCompany[slug] = { slug, display: slug, snapshots: [] };
+      if (manifest && manifest.display_name) byCompany[slug].display = manifest.display_name;
+      byCompany[slug].snapshots.push({ date, ts: isNaN(ts) ? null : ts, manifest });
+    }
+    // Per company: dedupe by date (keep newest generated_at), sort newest date first.
+    for (const slug in byCompany) {
+      const seen = {};
+      for (const s of byCompany[slug].snapshots) {
+        if (!seen[s.date] || (s.ts || 0) > (seen[s.date].ts || 0)) seen[s.date] = s;
+      }
+      byCompany[slug].snapshots = Object.keys(seen).map(d => seen[d])
+        .sort((a, b) => a.date < b.date ? 1 : (a.date > b.date ? -1 : 0));
+    }
+    const order = Object.keys(byCompany).sort((a, b) => a.localeCompare(b));
+    MKT.byCompany = byCompany;
+    MKT.order = order;
+    if (!order.length) {
+      MKT.selCompany = null; MKT.selDate = null;
+      if (coSel) coSel.innerHTML = '';
+      if (dateSel) dateSel.innerHTML = '';
+      board.innerHTML = '';
       meta.className = 'result visible error';
       meta.textContent = 'No marketing_status card filed yet — run handoff.py with the Tier 3 push enabled.';
       return;
     }
-    // One record per company (source_id = slug via the upsert key); sort alphabetically by slug.
-    recs.sort((a, b) => mktSlug(a).localeCompare(mktSlug(b)));
-    let html = '';
-    for (const rec of recs) {
-      const manifest = mktManifest(rec);
-      const slug = (manifest && manifest.business) || rec.source_id || '';
-      // Company header: display_name -> business -> slug (this record has no `company` field).
-      const company = (manifest && manifest.display_name) || slug || 'unknown';
-      // As-of + stale from generated_at (this record has no `updated_at` field).
-      const gen = manifest && manifest.generated_at;
-      let stale = '';
-      if (gen) {
-        const t = Date.parse(gen);
-        if (!isNaN(t) && (Date.now() - t) / 86400000 > 7) {
-          stale = '<span style="display:inline-block;margin-left:8px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f87171;border:1px solid #f87171;">Stale</span>';
-        }
-      }
-      const header =
-        '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">' +
-          '<div class="card-title" style="margin-bottom:0;">' + mktEsc(company) + '</div>' +
-          '<span style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">As of ' + mktEsc(gen || '—') + '</span>' +
-          stale +
-        '</div>';
-      const body = (manifest && Array.isArray(manifest.agents))
-        ? manifest.agents.map(mktAgentCard).join('')
-        : '<div style="font-size:12px;color:#e07e7e;">Card found, but it has no agent manifest to render.</div>';
-      html += '<div style="margin-bottom:24px;">' + header + body + '</div>';
-    }
+    // Preserve selection where possible, else default to first company / newest date.
+    MKT.selCompany = (prevCompany && byCompany[prevCompany]) ? prevCompany : order[0];
+    const co = byCompany[MKT.selCompany];
+    MKT.selDate = (prevDate && co.snapshots.some(s => s.date === prevDate))
+      ? prevDate
+      : (co.snapshots[0] ? co.snapshots[0].date : null);
+    mktFillCompanyDropdown();
+    mktFillDateDropdown();
+    mktRenderBoard();
     meta.className = 'result visible success';
-    meta.textContent = recs.length + (recs.length === 1 ? ' company' : ' companies') + ' · section marketing_status';
-    board.innerHTML = html;
+    meta.textContent = order.length + (order.length === 1 ? ' company' : ' companies') + ' · section marketing_status';
   } catch(e) {
     meta.className = 'result visible error';
     meta.textContent = 'Error: ' + e.message;
   }
+}
+
+function mktFillCompanyDropdown() {
+  const sel = document.getElementById('mktCompany');
+  if (!sel) return;
+  sel.innerHTML = MKT.order
+    .map(slug => '<option value="' + mktEsc(slug) + '">' + mktEsc(MKT.byCompany[slug].display) + '</option>')
+    .join('');
+  if (MKT.selCompany != null) sel.value = MKT.selCompany;
+}
+
+function mktFillDateDropdown() {
+  const sel = document.getElementById('mktDate');
+  if (!sel) return;
+  const co = MKT.byCompany[MKT.selCompany];
+  const snaps = co ? co.snapshots : [];
+  sel.innerHTML = snaps
+    .map(s => '<option value="' + mktEsc(s.date) + '">' + mktEsc(mktHumanDate(s.date)) + '</option>')
+    .join('');
+  if (MKT.selDate != null) sel.value = MKT.selDate;
+}
+
+function mktOnCompanyChange() {
+  const sel = document.getElementById('mktCompany');
+  MKT.selCompany = sel.value;
+  const co = MKT.byCompany[MKT.selCompany];
+  MKT.selDate = (co && co.snapshots[0]) ? co.snapshots[0].date : null;   // default newest
+  mktFillDateDropdown();
+  mktRenderBoard();
+}
+
+function mktRenderBoard() {
+  const dateSel = document.getElementById('mktDate');
+  if (dateSel && dateSel.value) MKT.selDate = dateSel.value;
+  const board = document.getElementById('marketingBoard');
+  if (!board) return;
+  const co = MKT.byCompany[MKT.selCompany];
+  if (!co) { board.innerHTML = ''; return; }
+  const snap = co.snapshots.find(s => s.date === MKT.selDate) || co.snapshots[0];
+  if (!snap) { board.innerHTML = ''; return; }
+  const manifest = snap.manifest;
+  // Stale fires on the company's NEWEST snapshot age, independent of the browsed date.
+  const newest = co.snapshots[0];
+  let stale = '';
+  if (newest && newest.ts != null && (Date.now() - newest.ts) / 86400000 > 7) {
+    stale = '<span style="display:inline-block;margin-left:8px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f87171;border:1px solid #f87171;">Stale</span>';
+  }
+  const header =
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">' +
+      '<div class="card-title" style="margin-bottom:0;">' + mktEsc(co.display) + '</div>' +
+      '<span style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;">As of ' + mktEsc(mktHumanDate(snap.date)) + '</span>' +
+      stale +
+    '</div>';
+  const body = (manifest && Array.isArray(manifest.agents))
+    ? manifest.agents.map(mktAgentCard).join('')
+    : '<div style="font-size:12px;color:#e07e7e;">Card found, but it has no agent manifest to render.</div>';
+  board.innerHTML = '<div style="margin-bottom:24px;">' + header + body + '</div>';
 }
 
 // ═══════════════ SALES TRACKER (Command Center) ═══════════════
