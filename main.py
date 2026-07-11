@@ -671,6 +671,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .tool-icon { font-size: 28px; margin-bottom: 10px; }
   .tool-name { font-size: 14px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
   .tool-desc { font-size: 12px; color: #555; line-height: 1.4; }
+  .cc-view-card.cc-view-active { border-color: #c9a84c; background: #171207; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
   .log-box { background: #060606; border: 1px solid #1a1a1a; border-radius: 6px; padding: 14px; font-size: 12px; color: #555; font-family: monospace; height: 200px; overflow-y: auto; line-height: 1.6; }
@@ -812,17 +813,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
     </div>
   </div>
-  <!-- Command Center selector: gates Sales / Agent / Marketing / Tracker / Niche below the project cards. Empty by default. -->
+  <!-- Command Center selector: card grid gates Sales / Agent / Marketing / Tracker / Niche below the project cards. No card active by default. -->
   <div style="margin-top:22px;">
     <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">View</label>
-    <select id="ccMenu" onchange="ccShow(this.value)" style="background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:10px 12px;color:#e0e0e0;font-family:inherit;font-size:13px;outline:none;min-width:220px;">
-      <option value="">-- Select --</option>
-      <option value="sales">Sales</option>
-      <option value="agent">Agent Control</option>
-      <option value="marketing">Marketing</option>
-      <option value="tracker">Project Tracker</option>
-      <option value="niche">Niche Scorer</option>
-    </select>
+    <div class="tools-grid">
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'sales')"><div class="tool-icon">📊</div><div class="tool-name">Sales</div><div class="tool-desc">Revenue and customer metrics across the portfolio</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'agent')"><div class="tool-icon">🤖</div><div class="tool-name">Agent Control</div><div class="tool-desc">Run Load, Catalog, and Gauge for Tier 4</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'marketing')"><div class="tool-icon">📣</div><div class="tool-name">Marketing</div><div class="tool-desc">Drafts and campaign status</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'tracker')"><div class="tool-icon">✅</div><div class="tool-name">Project Tracker</div><div class="tool-desc">Open flags and build status</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score a niche against the 5-criteria formula</div></div>
+    </div>
   </div>
 
   <!-- CC: SALES -->
@@ -1215,6 +1215,14 @@ function ccShow(val) {
   if (el) el.style.display = 'block';
   if (val === 'sales') loadSalesTracker();
   if (val === 'marketing') loadMarketing();
+}
+
+// Command Center view cards: move the active accent to the clicked card, then
+// delegate to ccShow (hide/show logic unchanged). No card active on load.
+function ccPick(el, val) {
+  document.querySelectorAll('.cc-view-card').forEach(c => c.classList.remove('cc-view-active'));
+  el.classList.add('cc-view-active');
+  ccShow(val);
 }
 
 // AGENT CONTROL — Tier 3 -> Tier 4 belt
