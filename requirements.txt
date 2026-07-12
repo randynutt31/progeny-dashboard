@@ -3,3 +3,5 @@ uvicorn==0.30.6
 pydantic==2.9.2
 anthropic>=0.40.0
 httpx>=0.25.0
+pymupdf>=1.24.0
+python-multipart>=0.0.9

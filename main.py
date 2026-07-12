@@ -4,16 +4,19 @@ Hosted on Railway. Open from any device, any browser.
 All AI calls route through server — no browser CORS issues.
 """
 
-from fastapi import FastAPI, Request, Header, HTTPException, Depends
+from fastapi import FastAPI, Request, Header, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import os
 import json
+import re
+import base64
 import hashlib
 import anthropic
 import httpx
+import fitz  # PyMuPDF — renders PDF pages to PNG for the Book Extract tool
 
 app = FastAPI(title="Progyny Infinite Dashboard")
 
@@ -557,6 +560,126 @@ async def tier3_ingest(payload: dict, _: bool = Depends(rt_auth)):
         return {"ok": False, "error": str(e)}
 
 
+# ── BOOK PDF -> TIER 3 EXTRACTS ──────────────────────────────────────────────────
+# Render a captured book PDF to page images with PyMuPDF, read them in batches of 4
+# with the SAME Anthropic client/model /api/ai uses, then file each returned extract
+# to tier3_databank via the same _sb_service upsert path /tier3/push uses.
+
+# Mode prompts, verbatim. Chosen from the frontend Mode dropdown.
+BOOK_MODE_PROMPTS = {
+    "excerpt": "Extracting for a private brain file from a book the owner legally owns. Read these page images. Pull the usable SUBSTANCE — anecdotes, decisions, philosophy, patterns. Paraphrase everything in your own words. NEVER reproduce the author's sentences. One short quote under 15 words only where the exact phrase is the point. No whole paragraphs. Page number for each. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+    "principle": "Extracting for a private brain file. Read these page images. Pull all educational substance — rules, definitions, principles, frameworks, procedures — in your own words as bare rules. Exclude the author's explanations, worked examples, and phrasing. Page number for each. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+    "framework": "Extracting for a private brain file. Read these page images. Pull the METHOD for finding and applying current law — frameworks, tests, steps — never a stored legal conclusion. Paraphrase in your own words. Page number for each. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+}
+
+
+def _book_slug(s):
+    s = (s or "").lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s or "book"
+
+
+@app.post("/api/extract-book")
+async def extract_book(
+    pdf: UploadFile = File(...),
+    book_name: str = Form(...),
+    mode: str = Form("excerpt"),
+    _: bool = Depends(rt_auth),
+):
+    if not client:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=500)
+    prompt_text = BOOK_MODE_PROMPTS.get(mode, BOOK_MODE_PROMPTS["excerpt"])
+    try:
+        raw = await pdf.read()
+        if not raw:
+            return JSONResponse({"error": "Empty PDF upload"}, status_code=400)
+
+        # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based page number.
+        try:
+            doc = fitz.open(stream=raw, filetype="pdf")
+            pages = []
+            for i in range(doc.page_count):
+                pix = doc.load_page(i).get_pixmap(dpi=150)
+                pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
+            doc.close()
+        except Exception as e:
+            return JSONResponse({"error": f"Could not read PDF: {e}"}, status_code=400)
+
+        if not pages:
+            return JSONResponse({"error": "PDF has no pages"}, status_code=400)
+
+        # 4 pages per Anthropic call. Each image is prefixed with its page number so the
+        # model can put the right N in every extract. The mode prompt is the final block.
+        extracts = []
+        for start in range(0, len(pages), 4):
+            batch = pages[start:start + 4]
+            content = []
+            for (pnum, b64) in batch:
+                content.append({"type": "text", "text": f"Page {pnum}:"})
+                content.append({"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png", "data": b64}})
+            content.append({"type": "text", "text": prompt_text})
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=4000,
+                    messages=[{"role": "user", "content": content}],
+                )
+                text = " ".join(b.text for b in response.content if hasattr(b, "text")).strip()
+            except Exception:
+                continue  # skip a failed batch, keep going
+
+            # Strip a ```json fence if Claude wrapped the array.
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+                text = text.strip()
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                continue
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and item.get("point"):
+                        extracts.append({
+                            "point": item.get("point"),
+                            "page": item.get("page"),
+                            "theme": item.get("theme") or "",
+                        })
+
+        # File each extract to tier3_databank. Upsert on (section, source_id) so
+        # re-running the same book never duplicates.
+        sl = _book_slug(book_name)
+        rows = [{
+            "section":     "book_extracts",
+            "source_type": "book_extract",
+            "source_id":   f"{sl}-{e.get('page')}-{idx}",
+            "title":       f"{book_name} — {e.get('theme') or ''}",
+            "content":     e.get("point"),
+            "record":      {"book": book_name, "mode": mode, "page": e.get("page"),
+                            "theme": e.get("theme"), "point": e.get("point")},
+        } for idx, e in enumerate(extracts)]
+
+        written = 0
+        if rows:
+            res = await _sb_service(
+                "POST", "tier3_databank",
+                params={"on_conflict": "section,source_id"},
+                json=rows,
+                prefer="resolution=merge-duplicates,return=representation",
+            )
+            written = len(res or [])
+
+        return {"ok": True, "book": book_name, "mode": mode,
+                "pages": len(pages), "count": len(extracts),
+                "written": written, "extracts": extracts}
+    except HTTPException as e:
+        return JSONResponse({"error": f"Supabase error: {e.detail}"}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── Dashboard HTML ────────────────────────────────────────────────────────────
 
 DASHBOARD_HTML = """<!DOCTYPE html>
@@ -1005,11 +1128,30 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- BOOK EXTRACT -->
+<div class="panel" id="panel-extract">
+  <div class="card">
+    <div class="card-title">Book Extract</div>
+    <p style="font-size:13px;color:#555;margin-bottom:14px;">Turn a captured book PDF into brain extracts — rendered page by page, read by Claude, and filed to the Tier 3 databank.</p>
+    <input type="file" id="bxFile" accept=".pdf" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#aaa;font-size:13px;font-family:inherit;outline:none;" />
+    <input type="text" id="bxName" placeholder="Book name" style="margin-top:12px;" />
+    <select id="bxMode" style="width:100%;margin-top:12px;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-family:inherit;font-size:14px;outline:none;">
+      <option value="excerpt">Excerpt (biography/narrative)</option>
+      <option value="principle">Principle (textbook/technical)</option>
+      <option value="framework">Framework (legal)</option>
+    </select>
+    <button class="btn" id="bxBtn" onclick="extractBook()">Extract</button>
+    <div class="result" id="bxStatus"></div>
+    <div class="result" id="bxResult"></div>
+  </div>
+</div>
+
 <!-- TOOLS -->
 <div class="panel" id="panel-tools">
   <div class="tools-grid">
     <div class="tool-card" onclick="switchTab('youtube')"><div class="tool-icon">▶️</div><div class="tool-name">YouTube Extractor</div><div class="tool-desc">Extract concepts from any YouTube video automatically</div></div>
     <div class="tool-card" onclick="switchTab('finance')"><div class="tool-icon">📈</div><div class="tool-name">Finance AI</div><div class="tool-desc">Market queries, stock lookup, Vault Trader status</div></div>
+    <div class="tool-card" onclick="switchTab('extract')"><div class="tool-icon">📖</div><div class="tool-name">Book Extract</div><div class="tool-desc">Turn a captured book PDF into brain extracts</div></div>
     <div class="tool-card" onclick="window.open('https://claude.ai','_blank')"><div class="tool-icon">⚡</div><div class="tool-name">Open Claude</div><div class="tool-desc">Launch Claude in a new tab for working sessions</div></div>
     <div class="tool-card" onclick="window.open('https://github.com/randynutt31','_blank')"><div class="tool-icon">🐙</div><div class="tool-name">GitHub</div><div class="tool-desc">View and manage your repos</div></div>
     <div class="tool-card" onclick="window.open('https://railway.app','_blank')"><div class="tool-icon">🚂</div><div class="tool-name">Railway</div><div class="tool-desc">Monitor deployed services and logs</div></div>
@@ -1791,6 +1933,61 @@ async function queryFinance() {
   } catch(e) {
     result.className = 'result visible error';
     result.textContent = 'Error: ' + e.message;
+  }
+}
+
+// BOOK EXTRACT
+async function extractBook() {
+  const fileEl = document.getElementById('bxFile');
+  const name = document.getElementById('bxName').value.trim();
+  const mode = document.getElementById('bxMode').value;
+  const status = document.getElementById('bxStatus');
+  const result = document.getElementById('bxResult');
+  const btn = document.getElementById('bxBtn');
+  result.className = 'result'; result.textContent = '';
+  if (!fileEl.files || !fileEl.files.length) {
+    status.className = 'result visible'; status.textContent = 'Choose a PDF first.'; return;
+  }
+  if (!name) {
+    status.className = 'result visible'; status.textContent = 'Enter a book name.'; return;
+  }
+  status.className = 'result visible';
+  status.textContent = '⬤ Extracting — rendering pages and reading with Claude. Long books can take a minute or two...';
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('pdf', fileEl.files[0]);
+    fd.append('book_name', name);
+    fd.append('mode', mode);
+    const res = await fetch('/api/extract-book', {
+      method: 'POST',
+      headers: {'X-API-Token': RT.token},
+      body: fd
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      status.className = 'result visible error';
+      status.textContent = '✗ ' + (data.error || data.detail || ('HTTP ' + res.status));
+      return;
+    }
+    const extracts = data.extracts || [];
+    status.className = 'result visible success';
+    status.textContent = '✓ Filed ' + (data.written != null ? data.written : extracts.length)
+      + ' extract(s) to Tier 3 from "' + name + '" (' + (data.pages || 0) + ' pages read).';
+    if (!extracts.length) {
+      result.className = 'result visible';
+      result.textContent = 'No extracts returned.';
+      return;
+    }
+    result.className = 'result visible success';
+    result.textContent = extracts.map(function(e) {
+      return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\n' : '\n') + e.point;
+    }).join('\n\n');
+  } catch(e) {
+    status.className = 'result visible error';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 
