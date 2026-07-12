@@ -1981,8 +1981,8 @@ async function extractBook() {
     }
     result.className = 'result visible success';
     result.textContent = extracts.map(function(e) {
-      return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\n' : '\n') + e.point;
-    }).join('\n\n');
+      return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\\n' : '\\n') + e.point;
+    }).join('\\n\\n');
   } catch(e) {
     status.className = 'result visible error';
     status.textContent = 'Error: ' + e.message;
