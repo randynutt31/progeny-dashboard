@@ -589,14 +589,35 @@ def _book_slug(s):
 JOBS = {}
 
 
-def _extract_book_worker(job_id, pages, book_name, mode, prompt_text):
-    """Runs in a daemon thread. Same 4-pages-per-call batch loop as before, but
-    updates JOBS[job_id] after each batch and upserts that batch to tier3_databank
-    via the async _sb_service (through asyncio.run, since we're off the event loop)."""
+def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
+    """Runs in a daemon thread. Renders the PDF here (not in the request) so the POST
+    returns the job_id near-instantly even for a 100-page book, then runs the same
+    4-pages-per-call batch loop: updates JOBS[job_id] after each batch and upserts that
+    batch to tier3_databank via the async _sb_service (asyncio.run, since we're off the
+    event loop)."""
     job = JOBS[job_id]
     sl = _book_slug(book_name)
     idx = 0  # running global index -> keeps the {slug}-{page}-{idx} source_id scheme
     try:
+        # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based
+        # page number. total_pages is unknown until this finishes, so set it here.
+        try:
+            doc = fitz.open(stream=raw, filetype="pdf")
+            pages = []
+            for i in range(doc.page_count):
+                pix = doc.load_page(i).get_pixmap(dpi=150)
+                pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
+            doc.close()
+        except Exception as e:
+            job["error"] = f"Could not read PDF: {e}"
+            job["status"] = "error"
+            return
+        if not pages:
+            job["error"] = "PDF has no pages"
+            job["status"] = "error"
+            return
+        job["total_pages"] = len(pages)
+
         for start in range(0, len(pages), 4):
             batch = pages[start:start + 4]
             content = []
@@ -676,25 +697,11 @@ async def extract_book(
     if not client:
         return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=500)
     prompt_text = BOOK_MODE_PROMPTS.get(mode, BOOK_MODE_PROMPTS["excerpt"])
+    # Only read the upload bytes in-request (fast). Rendering the PDF to page images is
+    # the slow part, so it happens in the worker — the POST returns near-instantly.
     raw = await pdf.read()
     if not raw:
         return JSONResponse({"error": "Empty PDF upload"}, status_code=400)
-
-    # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based page
-    # number. This is quick and stays inside the request; the slow Anthropic loop runs
-    # in the background thread so the route can return immediately.
-    try:
-        doc = fitz.open(stream=raw, filetype="pdf")
-        pages = []
-        for i in range(doc.page_count):
-            pix = doc.load_page(i).get_pixmap(dpi=150)
-            pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
-        doc.close()
-    except Exception as e:
-        return JSONResponse({"error": f"Could not read PDF: {e}"}, status_code=400)
-
-    if not pages:
-        return JSONResponse({"error": "PDF has no pages"}, status_code=400)
 
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {
@@ -702,7 +709,7 @@ async def extract_book(
         "status": "running",
         "book": book_name,
         "mode": mode,
-        "total_pages": len(pages),
+        "total_pages": 0,  # set once the worker finishes rendering
         "done_pages": 0,
         "written": 0,
         "extracts": [],
@@ -710,10 +717,10 @@ async def extract_book(
     }
     threading.Thread(
         target=_extract_book_worker,
-        args=(job_id, pages, book_name, mode, prompt_text),
+        args=(job_id, raw, book_name, mode, prompt_text),
         daemon=True,
     ).start()
-    return {"job_id": job_id, "total_pages": len(pages)}
+    return {"job_id": job_id, "total_pages": 0}
 
 
 @app.get("/api/extract-status/{job_id}")
@@ -853,6 +860,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
   .log-box { background: #060606; border: 1px solid #1a1a1a; border-radius: 6px; padding: 14px; font-size: 12px; color: #555; font-family: monospace; height: 200px; overflow-y: auto; line-height: 1.6; }
+  /* ── Book Extract holding-cell (scoped) ── */
+  #panel-extract .bx-drop { border: 1px dashed #333; border-radius: 8px; background: #0a0a0a; padding: 30px 18px; text-align: center; color: #666; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-size: 13px; }
+  #panel-extract .bx-drop:hover { border-color: #c9a84c; color: #888; }
+  #panel-extract .bx-drop.dragover { border-color: #c9a84c; background: #171207; color: #c9a84c; }
+  #panel-extract .bx-drop b { color: #c9a84c; }
+  #panel-extract .bx-queue { margin-top: 16px; }
+  #panel-extract .bx-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
+  #panel-extract .bx-row:last-child { border-bottom: none; }
+  #panel-extract .bx-file { color: #888; font-family: monospace; font-size: 11px; }
+  #panel-extract .bx-book { color: #e0e0e0; font-weight: 600; margin-top: 2px; }
+  #panel-extract .bx-right { display: flex; align-items: center; gap: 10px; }
+  #panel-extract .bx-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; background: #1a1a1a; color: #777; border: 1px solid #33333344; }
+  #panel-extract .bx-pill.waiting { background: #1a1a1a; color: #777; border-color: #33333344; }
+  #panel-extract .bx-pill.uploading, #panel-extract .bx-pill.reading { background: #1a1208; color: #c9a84c; border-color: #c9a84c44; }
+  #panel-extract .bx-pill.done { background: #0d1a0d; color: #4caf50; border-color: #4caf5044; }
+  #panel-extract .bx-pill.failed { background: #1a0d0d; color: #e05555; border-color: #e0555544; }
+  #panel-extract .bx-retry { background: transparent; border: 1px solid #c9a84c; color: #c9a84c; border-radius: 6px; padding: 4px 12px; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+  #panel-extract .bx-retry:hover { background: #c9a84c; color: #0a0a0a; }
   /* ── ReptiTerra feeding tab (scoped, own tokens) ── */
   #panel-feeding { --rt-bg:#0d0d0f; --rt-card:#16181c; --rt-border:#2a2d35; --rt-accent:#e85d2f; --rt-text:#e8e4dc; --rt-muted:#666; --rt-ok:#4ade80; --rt-warn:#facc15; --rt-danger:#f87171; font-family:Georgia,'Times New Roman',serif; }
   #panel-feeding .rt-wrap { max-width:480px; margin:0 auto; color:var(--rt-text); }
@@ -1183,21 +1208,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- BOOK EXTRACT -->
+<!-- BOOK EXTRACT — drag-and-drop holding cell -->
 <div class="panel" id="panel-extract">
   <div class="card">
-    <div class="card-title">Book Extract</div>
-    <p style="font-size:13px;color:#555;margin-bottom:14px;">Turn a captured book PDF into brain extracts — rendered page by page, read by Claude, and filed to the Tier 3 databank.</p>
-    <input type="file" id="bxFile" accept=".pdf" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#aaa;font-size:13px;font-family:inherit;outline:none;" />
-    <input type="text" id="bxName" placeholder="Book name" style="margin-top:12px;" />
-    <select id="bxMode" style="width:100%;margin-top:12px;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-family:inherit;font-size:14px;outline:none;">
+    <div class="card-title">Book Extract — Holding Cell</div>
+    <p style="font-size:13px;color:#555;margin-bottom:14px;">Drop one or more book PDFs. Each is named from its file, read page by page by Claude, and filed to the Tier 3 databank — one book at a time, in order.</p>
+    <select id="bxMode" style="width:100%;margin-bottom:12px;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-family:inherit;font-size:14px;outline:none;">
       <option value="excerpt">Excerpt (biography/narrative)</option>
       <option value="principle">Principle (textbook/technical)</option>
       <option value="framework">Framework (legal)</option>
     </select>
-    <button class="btn" id="bxBtn" onclick="extractBook()">Extract</button>
-    <div class="result" id="bxStatus"></div>
-    <div class="result" id="bxResult"></div>
+    <div class="bx-drop" id="bxDrop" onclick="document.getElementById('bxFile').click()">
+      Drop PDFs here, or <b>click to choose</b> — multiple at once
+    </div>
+    <input type="file" id="bxFile" accept=".pdf" multiple style="display:none;" onchange="bxAddFiles(this.files)" />
+    <div class="bx-queue" id="bxQueue"></div>
   </div>
 </div>
 
@@ -1991,32 +2016,98 @@ async function queryFinance() {
   }
 }
 
-// BOOK EXTRACT — kicks a background job, then polls status every 3s so long PDFs
-// can't 502. BX_POLL holds the active interval so we can stop it cleanly.
-var BX_POLL = null;
-async function extractBook() {
+// BOOK EXTRACT — drag-and-drop holding cell. Files queue up and process strictly
+// ONE AT A TIME (only one upload in flight), so long PDFs never pile up into a
+// timeout. Each file is auto-named from its filename; the Mode dropdown applies to
+// the whole queue.
+var BX_QUEUE = [];   // {id, file, fileName, book, status, done, total, count, error}
+var BX_SEQ = 0;
+var BX_RUNNING = false;
+
+// Musk_pt1.pdf -> "Musk": drop ".pdf", then a trailing part marker (_pt1 / pt3 / -pt4).
+function bxDeriveBook(fileName) {
+  var n = String(fileName || '').replace(/\\.pdf$/i, '');
+  n = n.replace(/[ _-]+pt\\s*\\d+$/i, '');
+  return n.trim() || 'Book';
+}
+
+function bxPillText(item) {
+  if (item.status === 'waiting') return 'waiting';
+  if (item.status === 'uploading') return 'uploading';
+  if (item.status === 'reading') return 'reading ' + (item.done || 0) + '/' + (item.total || 0);
+  if (item.status === 'done') return 'done (' + (item.count || 0) + ' extracts)';
+  if (item.status === 'failed') return 'failed';
+  return item.status;
+}
+
+function bxRenderQueue() {
+  const q = document.getElementById('bxQueue');
+  if (!q) return;
+  if (!BX_QUEUE.length) { q.innerHTML = ''; return; }
+  q.innerHTML = BX_QUEUE.map(function(item) {
+    const retry = item.status === 'failed'
+      ? '<button class="bx-retry" onclick="bxRetry(' + item.id + ')">Retry</button>' : '';
+    const err = (item.status === 'failed' && item.error)
+      ? '<div class="bx-file" style="color:#e05555;margin-top:3px;">' + rtEsc(item.error) + '</div>' : '';
+    return '<div class="bx-row"><div>' +
+        '<div class="bx-book">' + rtEsc(item.book) + '</div>' +
+        '<div class="bx-file">' + rtEsc(item.fileName) + '</div>' + err +
+      '</div><div class="bx-right">' +
+        '<span class="bx-pill ' + item.status + '">' + rtEsc(bxPillText(item)) + '</span>' +
+        retry +
+      '</div></div>';
+  }).join('');
+}
+
+function bxAddFiles(files) {
+  const list = Array.prototype.slice.call(files || []);
+  list.forEach(function(f) {
+    if (!/\\.pdf$/i.test(f.name)) return;  // PDFs only
+    BX_QUEUE.push({
+      id: ++BX_SEQ, file: f, fileName: f.name, book: bxDeriveBook(f.name),
+      status: 'waiting', done: 0, total: 0, count: 0, error: null
+    });
+  });
+  // Reset the input so choosing the same file again still fires onchange.
   const fileEl = document.getElementById('bxFile');
-  const name = document.getElementById('bxName').value.trim();
-  const mode = document.getElementById('bxMode').value;
-  const status = document.getElementById('bxStatus');
-  const result = document.getElementById('bxResult');
-  const btn = document.getElementById('bxBtn');
-  result.className = 'result'; result.textContent = '';
-  if (!fileEl.files || !fileEl.files.length) {
-    status.className = 'result visible'; status.textContent = 'Choose a PDF first.'; return;
+  if (fileEl) fileEl.value = '';
+  bxRenderQueue();
+  bxRunner();
+}
+
+function bxRetry(id) {
+  const item = BX_QUEUE.find(function(it) { return it.id === id; });
+  if (!item) return;
+  item.status = 'waiting'; item.error = null; item.done = 0; item.total = 0; item.count = 0;
+  bxRenderQueue();
+  bxRunner();
+}
+
+// Strictly sequential: pull the next waiting item, fully finish it, then the next.
+// The BX_RUNNING guard means adding files or hitting Retry mid-run never starts a
+// second concurrent runner — the existing loop re-scans the queue and picks them up.
+async function bxRunner() {
+  if (BX_RUNNING) return;
+  BX_RUNNING = true;
+  try {
+    while (true) {
+      const item = BX_QUEUE.find(function(it) { return it.status === 'waiting'; });
+      if (!item) break;
+      await bxProcess(item);
+    }
+  } finally {
+    BX_RUNNING = false;
   }
-  if (!name) {
-    status.className = 'result visible'; status.textContent = 'Enter a book name.'; return;
-  }
-  if (BX_POLL) { clearInterval(BX_POLL); BX_POLL = null; }
-  status.className = 'result visible';
-  status.textContent = '⬤ Uploading & rendering pages...';
-  btn.disabled = true;
+}
+
+async function bxProcess(item) {
+  item.status = 'uploading'; item.done = 0; item.total = 0; bxRenderQueue();
+  var jobId;
   try {
     const fd = new FormData();
-    fd.append('pdf', fileEl.files[0]);
-    fd.append('book_name', name);
-    fd.append('mode', mode);
+    fd.append('pdf', item.file);
+    fd.append('book_name', item.book);
+    fd.append('mode', document.getElementById('bxMode').value);
     const res = await fetch('/api/extract-book', {
       method: 'POST',
       headers: {'X-API-Token': RT.token},
@@ -2024,78 +2115,60 @@ async function extractBook() {
     });
     const data = await res.json();
     if (!res.ok || data.error || !data.job_id) {
-      status.className = 'result visible error';
-      status.textContent = '✗ ' + (data.error || data.detail || ('HTTP ' + res.status));
-      btn.disabled = false;
-      return;
+      throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     }
-    const jobId = data.job_id;
-    const total = data.total_pages || 0;
-    status.className = 'result visible';
-    status.textContent = '⬤ Reading page 0 of ' + total + ' — 0 extracts filed.';
-    BX_POLL = setInterval(function() { bxPoll(jobId, name); }, 3000);
+    jobId = data.job_id;
   } catch(e) {
-    status.className = 'result visible error';
-    status.textContent = 'Error: ' + e.message;
-    btn.disabled = false;
+    item.status = 'failed'; item.error = e.message; bxRenderQueue(); return;
   }
+  item.status = 'reading'; bxRenderQueue();
+  await bxPollJob(item, jobId);
 }
 
-function bxRender(extracts, result) {
-  if (!extracts.length) {
-    result.className = 'result visible';
-    result.textContent = 'No extracts returned.';
-    return;
-  }
-  result.className = 'result visible success';
-  result.textContent = extracts.map(function(e) {
-    return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\\n' : '\\n') + e.point;
-  }).join('\\n\\n');
+// Poll one job every 3s until it reaches a terminal state, then resolve so the
+// runner advances. Any error (network, 502, or job status "error") -> failed row.
+function bxPollJob(item, jobId) {
+  return new Promise(function(resolve) {
+    const iv = setInterval(async function() {
+      try {
+        const res = await fetch('/api/extract-status/' + jobId, {
+          headers: {'X-API-Token': RT.token}
+        });
+        const data = await res.json();
+        if (!data.status) { throw new Error(data.error || data.detail || ('HTTP ' + res.status)); }
+        item.done = data.done_pages || 0;
+        item.total = data.total_pages || 0;
+        item.count = data.written || 0;
+        if (data.status === 'running') { bxRenderQueue(); return; }
+        clearInterval(iv);
+        if (data.status === 'error') {
+          item.status = 'failed';
+          item.error = (data.error || 'Job failed') + ' — ' + (data.written || 0) + ' partial saved to Tier 3';
+        } else {
+          item.status = 'done';
+          item.count = data.written || 0;
+        }
+        bxRenderQueue();
+        resolve();
+      } catch(e) {
+        clearInterval(iv);
+        item.status = 'failed'; item.error = e.message; bxRenderQueue(); resolve();
+      }
+    }, 3000);
+  });
 }
 
-async function bxPoll(jobId, name) {
-  const status = document.getElementById('bxStatus');
-  const result = document.getElementById('bxResult');
-  const btn = document.getElementById('bxBtn');
-  try {
-    const res = await fetch('/api/extract-status/' + jobId, {
-      headers: {'X-API-Token': RT.token}
-    });
-    const data = await res.json();
-    if (!data.status) {
-      clearInterval(BX_POLL); BX_POLL = null;
-      status.className = 'result visible error';
-      status.textContent = '✗ ' + (data.error || data.detail || ('HTTP ' + res.status));
-      btn.disabled = false;
-      return;
-    }
-    const done = data.done_pages || 0;
-    const total = data.total_pages || 0;
-    const written = data.written || 0;
-    if (data.status === 'running') {
-      status.className = 'result visible';
-      status.textContent = '⬤ Reading page ' + done + ' of ' + total + ' — ' + written + ' extracts filed.';
-      return;
-    }
-    // done or error -> stop polling and render whatever landed
-    clearInterval(BX_POLL); BX_POLL = null;
-    btn.disabled = false;
-    bxRender(data.extracts || [], result);
-    if (data.status === 'error') {
-      status.className = 'result visible error';
-      status.textContent = '✗ ' + (data.error || 'Job failed')
-        + ' — ' + written + ' partial extract(s) saved to Tier 3.';
-    } else {
-      status.className = 'result visible success';
-      status.textContent = '✓ Done — ' + written + ' extracts in Tier 3.';
-    }
-  } catch(e) {
-    clearInterval(BX_POLL); BX_POLL = null;
-    status.className = 'result visible error';
-    status.textContent = 'Error: ' + e.message;
-    btn.disabled = false;
-  }
-}
+// Drag-and-drop wiring on the drop zone.
+(function() {
+  const drop = document.getElementById('bxDrop');
+  if (!drop) return;
+  drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', function(e) { e.preventDefault(); drop.classList.remove('dragover'); });
+  drop.addEventListener('drop', function(e) {
+    e.preventDefault(); drop.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files) bxAddFiles(e.dataTransfer.files);
+  });
+})();
 
 // PASTE CHAT -> TIER 3
 async function ingestTier3() {
