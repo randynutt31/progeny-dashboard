@@ -789,6 +789,177 @@ async def extract_status(job_id: str, _: bool = Depends(rt_auth)):
     }
 
 
+# ── BOOK OCR TEXT -> TIER 3 EXTRACTS (second option; image path above is untouched) ──
+# Same JOBS store + /api/extract-status polling + tier3_databank row shape as the image
+# path — only the input differs (raw OCR text instead of page images). Paraphrase is
+# MANDATORY here: the prompts forbid reproducing the author's sentences. That is the
+# copyright line — we never store verbatim book text.
+BOOK_MODE_PROMPTS_TEXT = {
+    "excerpt": "Below is OCR page text from a book the owner legally owns. Pull the usable SUBSTANCE — anecdotes, decisions, philosophy, patterns. Paraphrase everything in your own words. NEVER reproduce the author's sentences or copy phrasing from the text. One short quote under 15 words only where the exact phrase is the point. No whole paragraphs. Use the 'Page N:' labels to attribute a page number to each point. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+    "principle": "Below is OCR page text from a book the owner legally owns. Pull all educational substance — rules, definitions, principles, frameworks, procedures — in your own words as bare rules. Exclude the author's explanations, worked examples, and phrasing; never copy sentences from the text. Use the 'Page N:' labels to attribute a page number to each point. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+    "framework": "Below is OCR page text from a book the owner legally owns. Pull the METHOD for finding and applying current law — frameworks, tests, steps — never a stored legal conclusion. Paraphrase in your own words; never copy sentences from the text. Use the 'Page N:' labels to attribute a page number to each point. Return ONLY a JSON array: [{\"point\":\"...\",\"page\":N,\"theme\":\"...\"}].",
+}
+
+BOOK_TEXT_CHUNK_CHARS = 8000  # bounded per-call text size for the OCR/text path
+
+
+def _chunk_book_text(text):
+    """Split OCR text into bounded chunks. Prefers '===== PAGE N =====' markers
+    (grouping whole pages up to the char budget) and falls back to fixed char windows
+    when no markers are present. Returns a list of (chunk_text, first_page_label)."""
+    marker_re = re.compile(r"=+\s*PAGE\s+(\d+)\s*=+", re.IGNORECASE)
+    matches = list(marker_re.finditer(text))
+    chunks = []
+    if matches:
+        pages = []
+        for i, m in enumerate(matches):
+            page_no = int(m.group(1))
+            body_start = m.end()
+            body_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            body = text[body_start:body_end].strip()
+            if body:
+                pages.append((page_no, body))
+        cur, cur_len, cur_first = [], 0, None
+        for (pno, body) in pages:
+            block = f"Page {pno}:\n{body}"
+            if cur and cur_len + len(block) > BOOK_TEXT_CHUNK_CHARS:
+                chunks.append(("\n\n".join(cur), cur_first))
+                cur, cur_len, cur_first = [], 0, None
+            if not cur:
+                cur_first = pno
+            cur.append(block)
+            cur_len += len(block)
+        if cur:
+            chunks.append(("\n\n".join(cur), cur_first))
+    else:
+        page = 1
+        for start in range(0, len(text), BOOK_TEXT_CHUNK_CHARS):
+            window = text[start:start + BOOK_TEXT_CHUNK_CHARS].strip()
+            if window:
+                chunks.append((f"Page {page}:\n{window}", page))
+            page += 1
+    return chunks
+
+
+def _extract_book_text_worker(job_id, text, book_name, mode, prompt_text):
+    """Text twin of _extract_book_worker: chunk OCR text, paraphrase each chunk with the
+    SAME model, write the SAME tier3_databank row shape via the SAME _sb_service upsert,
+    and update the SAME job fields so /api/extract-status drives the queue identically.
+    'pages' in the status payload map onto chunks so the pill reads 'reading X/Y'."""
+    job = JOBS[job_id]
+    sl = _book_slug(book_name)
+    idx = 0  # running global index -> keeps the {slug}-{page}-{idx} source_id scheme
+    try:
+        parts = _chunk_book_text(text)
+        total = len(parts)
+        job["total_pages"] = total
+        print(f"[book-extract-text] book={book_name!r} chars={len(text)} chunks={total}", flush=True)
+        if not parts:
+            job["error"] = "No text to extract"
+            job["status"] = "error"
+            return
+
+        for i, (chunk_text, page_label) in enumerate(parts):
+            chunk_no = i + 1
+            out = ""
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=4000,
+                    messages=[{"role": "user", "content": chunk_text + "\n\n" + prompt_text}],
+                )
+                out = " ".join(b.text for b in response.content if hasattr(b, "text")).strip()
+            except Exception as e:
+                print(f"[book-extract-text] chunk {chunk_no}: API call FAILED: {e}", flush=True)
+            resp_chars = len(out)  # raw model response length, before fence-stripping
+
+            # Strip a ```json fence if Claude wrapped the array.
+            if out.startswith("```"):
+                out = out.split("```")[1]
+                if out.startswith("json"):
+                    out = out[4:]
+                out = out.strip()
+            chunk_extracts = []
+            if out:
+                try:
+                    parsed = json.loads(out)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and item.get("point"):
+                            chunk_extracts.append({
+                                "point": item.get("point"),
+                                "page": item.get("page") if item.get("page") is not None else page_label,
+                                "theme": item.get("theme") or "",
+                            })
+
+            print(f"[book-extract-text] chunk {chunk_no}/{total}: "
+                  f"respChars={resp_chars} extracted={len(chunk_extracts)}", flush=True)
+
+            # SAME row shape + SAME upsert as the image path.
+            rows = [{
+                "section":     "book_extracts",
+                "source_type": "book_extract",
+                "source_id":   f"{sl}-{e.get('page')}-{idx + j}",
+                "title":       f"{book_name} — {e.get('theme') or ''}",
+                "content":     e.get("point"),
+                "record":      {"book": book_name, "mode": mode, "page": e.get("page"),
+                                "theme": e.get("theme"), "point": e.get("point")},
+            } for j, e in enumerate(chunk_extracts)]
+            if rows:
+                res = asyncio.run(_sb_service(
+                    "POST", "tier3_databank",
+                    params={"on_conflict": "section,source_id"},
+                    json=rows,
+                    prefer="resolution=merge-duplicates,return=representation",
+                ))
+                job["written"] += len(res or [])
+
+            idx += len(chunk_extracts)
+            job["extracts"].extend(chunk_extracts)
+            job["done_pages"] = chunk_no
+        job["status"] = "done"
+    except Exception as e:
+        job["error"] = str(e)
+        job["status"] = "error"
+
+
+class BookTextRequest(BaseModel):
+    book_name: str
+    text: str
+    mode: str = "excerpt"
+
+
+@app.post("/api/extract-book-text")
+async def extract_book_text(req: BookTextRequest, _: bool = Depends(rt_auth)):
+    if not client:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=500)
+    prompt_text = BOOK_MODE_PROMPTS_TEXT.get(req.mode, BOOK_MODE_PROMPTS_TEXT["excerpt"])
+    text = req.text or ""
+    if not text.strip():
+        return JSONResponse({"error": "Empty text upload"}, status_code=400)
+
+    job_id = uuid.uuid4().hex
+    JOBS[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "book": req.book_name,
+        "mode": req.mode,
+        "total_pages": 0,  # set to chunk count once the worker starts
+        "done_pages": 0,
+        "written": 0,
+        "extracts": [],
+        "error": None,
+    }
+    threading.Thread(
+        target=_extract_book_text_worker,
+        args=(job_id, text, req.book_name, req.mode, prompt_text),
+        daemon=True,
+    ).start()
+    return {"job_id": job_id, "total_pages": 0}
+
+
 # ── Dashboard HTML ────────────────────────────────────────────────────────────
 
 DASHBOARD_HTML = """<!DOCTYPE html>
@@ -1266,9 +1437,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <option value="framework">Framework (legal)</option>
     </select>
     <div class="bx-drop" id="bxDrop" onclick="document.getElementById('bxFile').click()">
-      Drop PDFs here, or <b>click to choose</b> — multiple at once
+      Drop PDFs or .txt here, or <b>click to choose</b> — multiple at once
     </div>
-    <input type="file" id="bxFile" accept=".pdf" multiple style="display:none;" onchange="bxAddFiles(this.files)" />
+    <input type="file" id="bxFile" accept=".pdf,.txt" multiple style="display:none;" onchange="bxAddFiles(this.files)" />
     <div class="bx-queue" id="bxQueue"></div>
     <button class="btn btn-ghost" onclick="bxClearQueue()">Clear Queue</button>
   </div>
@@ -2072,9 +2243,9 @@ var BX_QUEUE = [];   // {id, file, fileName, book, status, done, total, count, e
 var BX_SEQ = 0;
 var BX_RUNNING = false;
 
-// Musk_pt1.pdf -> "Musk": drop ".pdf", then a trailing part marker (_pt1 / pt3 / -pt4).
+// Musk_pt1.pdf -> "Musk": drop ".pdf"/".txt", then a trailing part marker (_pt1 / pt3 / -pt4).
 function bxDeriveBook(fileName) {
-  var n = String(fileName || '').replace(/\\.pdf$/i, '');
+  var n = String(fileName || '').replace(/\\.(pdf|txt)$/i, '');
   n = n.replace(/[ _-]+pt\\s*\\d+$/i, '');
   return n.trim() || 'Book';
 }
@@ -2110,7 +2281,7 @@ function bxRenderQueue() {
 function bxAddFiles(files) {
   const list = Array.prototype.slice.call(files || []);
   list.forEach(function(f) {
-    if (!/\\.pdf$/i.test(f.name)) return;  // PDFs only
+    if (!/\\.(pdf|txt)$/i.test(f.name)) return;  // PDFs and .txt only
     BX_QUEUE.push({
       id: ++BX_SEQ, file: f, fileName: f.name, book: bxDeriveBook(f.name),
       status: 'waiting', done: 0, total: 0, count: 0, error: null
@@ -2163,15 +2334,29 @@ async function bxProcess(item) {
   item.status = 'uploading'; item.done = 0; item.total = 0; bxRenderQueue();
   var jobId;
   try {
-    const fd = new FormData();
-    fd.append('pdf', item.file);
-    fd.append('book_name', item.book);
-    fd.append('mode', document.getElementById('bxMode').value);
-    const res = await fetch('/api/extract-book', {
-      method: 'POST',
-      headers: {'X-API-Token': RT.token},
-      body: fd
-    });
+    const mode = document.getElementById('bxMode').value;
+    var res;
+    if (/\\.txt$/i.test(item.fileName)) {
+      // TEXT path: browser reads the whole .txt and POSTs it once as JSON; the
+      // backend chunks + paraphrases. Same {job_id} + status polling as PDFs.
+      const text = await item.file.text();
+      res = await fetch('/api/extract-book-text', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-API-Token': RT.token},
+        body: JSON.stringify({ book_name: item.book, text: text, mode: mode })
+      });
+    } else {
+      // IMAGE path — unchanged: multipart PDF upload to the existing route.
+      const fd = new FormData();
+      fd.append('pdf', item.file);
+      fd.append('book_name', item.book);
+      fd.append('mode', mode);
+      res = await fetch('/api/extract-book', {
+        method: 'POST',
+        headers: {'X-API-Token': RT.token},
+        body: fd
+      });
+    }
     const data = await res.json();
     if (!res.ok || data.error || !data.job_id) {
       throw new Error(data.error || data.detail || ('HTTP ' + res.status));
