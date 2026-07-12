@@ -14,6 +14,9 @@ import json
 import re
 import base64
 import hashlib
+import uuid
+import asyncio
+import threading
 import anthropic
 import httpx
 import fitz  # PyMuPDF — renders PDF pages to PNG for the Book Extract tool
@@ -579,38 +582,21 @@ def _book_slug(s):
     return s or "book"
 
 
-@app.post("/api/extract-book")
-async def extract_book(
-    pdf: UploadFile = File(...),
-    book_name: str = Form(...),
-    mode: str = Form("excerpt"),
-    _: bool = Depends(rt_auth),
-):
-    if not client:
-        return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=500)
-    prompt_text = BOOK_MODE_PROMPTS.get(mode, BOOK_MODE_PROMPTS["excerpt"])
+# In-memory job store for background Book Extract runs. Long PDFs mean dozens of
+# Anthropic calls, which blow past Railway's request timeout (502) if done inline —
+# so the route renders the PDF, kicks a daemon thread, and the client polls status.
+# In-memory is fine: a lost job on restart just means re-running the extract.
+JOBS = {}
+
+
+def _extract_book_worker(job_id, pages, book_name, mode, prompt_text):
+    """Runs in a daemon thread. Same 4-pages-per-call batch loop as before, but
+    updates JOBS[job_id] after each batch and upserts that batch to tier3_databank
+    via the async _sb_service (through asyncio.run, since we're off the event loop)."""
+    job = JOBS[job_id]
+    sl = _book_slug(book_name)
+    idx = 0  # running global index -> keeps the {slug}-{page}-{idx} source_id scheme
     try:
-        raw = await pdf.read()
-        if not raw:
-            return JSONResponse({"error": "Empty PDF upload"}, status_code=400)
-
-        # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based page number.
-        try:
-            doc = fitz.open(stream=raw, filetype="pdf")
-            pages = []
-            for i in range(doc.page_count):
-                pix = doc.load_page(i).get_pixmap(dpi=150)
-                pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
-            doc.close()
-        except Exception as e:
-            return JSONResponse({"error": f"Could not read PDF: {e}"}, status_code=400)
-
-        if not pages:
-            return JSONResponse({"error": "PDF has no pages"}, status_code=400)
-
-        # 4 pages per Anthropic call. Each image is prefixed with its page number so the
-        # model can put the right N in every extract. The mode prompt is the final block.
-        extracts = []
         for start in range(0, len(pages), 4):
             batch = pages[start:start + 4]
             content = []
@@ -627,7 +613,7 @@ async def extract_book(
                 )
                 text = " ".join(b.text for b in response.content if hasattr(b, "text")).strip()
             except Exception:
-                continue  # skip a failed batch, keep going
+                text = ""  # skip a failed batch, keep going
 
             # Strip a ```json fence if Claude wrapped the array.
             if text.startswith("```"):
@@ -635,49 +621,118 @@ async def extract_book(
                 if text.startswith("json"):
                     text = text[4:]
                 text = text.strip()
-            try:
-                parsed = json.loads(text)
-            except Exception:
-                continue
-            if isinstance(parsed, list):
-                for item in parsed:
-                    if isinstance(item, dict) and item.get("point"):
-                        extracts.append({
-                            "point": item.get("point"),
-                            "page": item.get("page"),
-                            "theme": item.get("theme") or "",
-                        })
+            batch_extracts = []
+            if text:
+                try:
+                    parsed = json.loads(text)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and item.get("point"):
+                            batch_extracts.append({
+                                "point": item.get("point"),
+                                "page": item.get("page"),
+                                "theme": item.get("theme") or "",
+                            })
 
-        # File each extract to tier3_databank. Upsert on (section, source_id) so
-        # re-running the same book never duplicates.
-        sl = _book_slug(book_name)
-        rows = [{
-            "section":     "book_extracts",
-            "source_type": "book_extract",
-            "source_id":   f"{sl}-{e.get('page')}-{idx}",
-            "title":       f"{book_name} — {e.get('theme') or ''}",
-            "content":     e.get("point"),
-            "record":      {"book": book_name, "mode": mode, "page": e.get("page"),
-                            "theme": e.get("theme"), "point": e.get("point")},
-        } for idx, e in enumerate(extracts)]
+            # File this batch to tier3_databank. Upsert on (section, source_id) so
+            # re-running the same book never duplicates.
+            rows = [{
+                "section":     "book_extracts",
+                "source_type": "book_extract",
+                "source_id":   f"{sl}-{e.get('page')}-{idx + j}",
+                "title":       f"{book_name} — {e.get('theme') or ''}",
+                "content":     e.get("point"),
+                "record":      {"book": book_name, "mode": mode, "page": e.get("page"),
+                                "theme": e.get("theme"), "point": e.get("point")},
+            } for j, e in enumerate(batch_extracts)]
+            if rows:
+                res = asyncio.run(_sb_service(
+                    "POST", "tier3_databank",
+                    params={"on_conflict": "section,source_id"},
+                    json=rows,
+                    prefer="resolution=merge-duplicates,return=representation",
+                ))
+                job["written"] += len(res or [])
 
-        written = 0
-        if rows:
-            res = await _sb_service(
-                "POST", "tier3_databank",
-                params={"on_conflict": "section,source_id"},
-                json=rows,
-                prefer="resolution=merge-duplicates,return=representation",
-            )
-            written = len(res or [])
-
-        return {"ok": True, "book": book_name, "mode": mode,
-                "pages": len(pages), "count": len(extracts),
-                "written": written, "extracts": extracts}
-    except HTTPException as e:
-        return JSONResponse({"error": f"Supabase error: {e.detail}"}, status_code=e.status_code)
+            idx += len(batch_extracts)
+            job["extracts"].extend(batch_extracts)
+            job["done_pages"] = min(start + 4, len(pages))
+        job["status"] = "done"
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        # Keep whatever was already written; just flag the failure.
+        job["error"] = str(e)
+        job["status"] = "error"
+
+
+@app.post("/api/extract-book")
+async def extract_book(
+    pdf: UploadFile = File(...),
+    book_name: str = Form(...),
+    mode: str = Form("excerpt"),
+    _: bool = Depends(rt_auth),
+):
+    if not client:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY not set"}, status_code=500)
+    prompt_text = BOOK_MODE_PROMPTS.get(mode, BOOK_MODE_PROMPTS["excerpt"])
+    raw = await pdf.read()
+    if not raw:
+        return JSONResponse({"error": "Empty PDF upload"}, status_code=400)
+
+    # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based page
+    # number. This is quick and stays inside the request; the slow Anthropic loop runs
+    # in the background thread so the route can return immediately.
+    try:
+        doc = fitz.open(stream=raw, filetype="pdf")
+        pages = []
+        for i in range(doc.page_count):
+            pix = doc.load_page(i).get_pixmap(dpi=150)
+            pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
+        doc.close()
+    except Exception as e:
+        return JSONResponse({"error": f"Could not read PDF: {e}"}, status_code=400)
+
+    if not pages:
+        return JSONResponse({"error": "PDF has no pages"}, status_code=400)
+
+    job_id = uuid.uuid4().hex
+    JOBS[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "book": book_name,
+        "mode": mode,
+        "total_pages": len(pages),
+        "done_pages": 0,
+        "written": 0,
+        "extracts": [],
+        "error": None,
+    }
+    threading.Thread(
+        target=_extract_book_worker,
+        args=(job_id, pages, book_name, mode, prompt_text),
+        daemon=True,
+    ).start()
+    return {"job_id": job_id, "total_pages": len(pages)}
+
+
+@app.get("/api/extract-status/{job_id}")
+async def extract_status(job_id: str, _: bool = Depends(rt_auth)):
+    job = JOBS.get(job_id)
+    if not job:
+        return JSONResponse({"error": "Unknown job_id"}, status_code=404)
+    return {
+        "job_id":      job["id"],
+        "status":      job["status"],
+        "book":        job["book"],
+        "mode":        job["mode"],
+        "total_pages": job["total_pages"],
+        "done_pages":  job["done_pages"],
+        "written":     job["written"],
+        "count":       len(job["extracts"]),
+        "extracts":    job["extracts"],
+        "error":       job["error"],
+    }
 
 
 # ── Dashboard HTML ────────────────────────────────────────────────────────────
@@ -1936,7 +1991,9 @@ async function queryFinance() {
   }
 }
 
-// BOOK EXTRACT
+// BOOK EXTRACT — kicks a background job, then polls status every 3s so long PDFs
+// can't 502. BX_POLL holds the active interval so we can stop it cleanly.
+var BX_POLL = null;
 async function extractBook() {
   const fileEl = document.getElementById('bxFile');
   const name = document.getElementById('bxName').value.trim();
@@ -1951,8 +2008,9 @@ async function extractBook() {
   if (!name) {
     status.className = 'result visible'; status.textContent = 'Enter a book name.'; return;
   }
+  if (BX_POLL) { clearInterval(BX_POLL); BX_POLL = null; }
   status.className = 'result visible';
-  status.textContent = '⬤ Extracting — rendering pages and reading with Claude. Long books can take a minute or two...';
+  status.textContent = '⬤ Uploading & rendering pages...';
   btn.disabled = true;
   try {
     const fd = new FormData();
@@ -1965,28 +2023,76 @@ async function extractBook() {
       body: fd
     });
     const data = await res.json();
-    if (!res.ok || data.error) {
+    if (!res.ok || data.error || !data.job_id) {
       status.className = 'result visible error';
       status.textContent = '✗ ' + (data.error || data.detail || ('HTTP ' + res.status));
+      btn.disabled = false;
       return;
     }
-    const extracts = data.extracts || [];
-    status.className = 'result visible success';
-    status.textContent = '✓ Filed ' + (data.written != null ? data.written : extracts.length)
-      + ' extract(s) to Tier 3 from "' + name + '" (' + (data.pages || 0) + ' pages read).';
-    if (!extracts.length) {
-      result.className = 'result visible';
-      result.textContent = 'No extracts returned.';
-      return;
-    }
-    result.className = 'result visible success';
-    result.textContent = extracts.map(function(e) {
-      return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\\n' : '\\n') + e.point;
-    }).join('\\n\\n');
+    const jobId = data.job_id;
+    const total = data.total_pages || 0;
+    status.className = 'result visible';
+    status.textContent = '⬤ Reading page 0 of ' + total + ' — 0 extracts filed.';
+    BX_POLL = setInterval(function() { bxPoll(jobId, name); }, 3000);
   } catch(e) {
     status.className = 'result visible error';
     status.textContent = 'Error: ' + e.message;
-  } finally {
+    btn.disabled = false;
+  }
+}
+
+function bxRender(extracts, result) {
+  if (!extracts.length) {
+    result.className = 'result visible';
+    result.textContent = 'No extracts returned.';
+    return;
+  }
+  result.className = 'result visible success';
+  result.textContent = extracts.map(function(e) {
+    return '[p.' + (e.page == null ? '?' : e.page) + '] ' + (e.theme ? '(' + e.theme + ')\\n' : '\\n') + e.point;
+  }).join('\\n\\n');
+}
+
+async function bxPoll(jobId, name) {
+  const status = document.getElementById('bxStatus');
+  const result = document.getElementById('bxResult');
+  const btn = document.getElementById('bxBtn');
+  try {
+    const res = await fetch('/api/extract-status/' + jobId, {
+      headers: {'X-API-Token': RT.token}
+    });
+    const data = await res.json();
+    if (!data.status) {
+      clearInterval(BX_POLL); BX_POLL = null;
+      status.className = 'result visible error';
+      status.textContent = '✗ ' + (data.error || data.detail || ('HTTP ' + res.status));
+      btn.disabled = false;
+      return;
+    }
+    const done = data.done_pages || 0;
+    const total = data.total_pages || 0;
+    const written = data.written || 0;
+    if (data.status === 'running') {
+      status.className = 'result visible';
+      status.textContent = '⬤ Reading page ' + done + ' of ' + total + ' — ' + written + ' extracts filed.';
+      return;
+    }
+    // done or error -> stop polling and render whatever landed
+    clearInterval(BX_POLL); BX_POLL = null;
+    btn.disabled = false;
+    bxRender(data.extracts || [], result);
+    if (data.status === 'error') {
+      status.className = 'result visible error';
+      status.textContent = '✗ ' + (data.error || 'Job failed')
+        + ' — ' + written + ' partial extract(s) saved to Tier 3.';
+    } else {
+      status.className = 'result visible success';
+      status.textContent = '✓ Done — ' + written + ' extracts in Tier 3.';
+    }
+  } catch(e) {
+    clearInterval(BX_POLL); BX_POLL = null;
+    status.className = 'result visible error';
+    status.textContent = 'Error: ' + e.message;
     btn.disabled = false;
   }
 }
