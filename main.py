@@ -1270,6 +1270,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
     <input type="file" id="bxFile" accept=".pdf" multiple style="display:none;" onchange="bxAddFiles(this.files)" />
     <div class="bx-queue" id="bxQueue"></div>
+    <button class="btn btn-ghost" onclick="bxClearQueue()">Clear Queue</button>
   </div>
 </div>
 
@@ -2128,6 +2129,17 @@ function bxRetry(id) {
   item.status = 'waiting'; item.error = null; item.done = 0; item.total = 0; item.count = 0;
   bxRenderQueue();
   bxRunner();
+}
+
+// Empty ONLY the UI holding-cell array so files stop stacking between runs. Never
+// touches Tier 3 book_extracts (those are written server-side and are the product).
+// Guard: keep any actively-processing item ('uploading'/'reading') so an in-flight
+// extraction is not wiped mid-run; everything else (waiting/done/failed) is cleared.
+function bxClearQueue() {
+  BX_QUEUE = BX_QUEUE.filter(function(it) {
+    return it.status === 'uploading' || it.status === 'reading';
+  });
+  bxRenderQueue();
 }
 
 // Strictly sequential: pull the next waiting item, fully finish it, then the next.
