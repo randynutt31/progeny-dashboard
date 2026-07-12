@@ -600,26 +600,43 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
     idx = 0  # running global index -> keeps the {slug}-{page}-{idx} source_id scheme
     try:
         # Render every page to a 150-dpi PNG, base64-encoded, paired with its 1-based
-        # page number. total_pages is unknown until this finishes, so set it here.
+        # page number. These are image-only Kindle PDFs (no text layer), so each page
+        # MUST be rasterized and sent to the model as an image.
         try:
             doc = fitz.open(stream=raw, filetype="pdf")
-            pages = []
-            for i in range(doc.page_count):
-                pix = doc.load_page(i).get_pixmap(dpi=150)
-                pages.append((i + 1, base64.standard_b64encode(pix.tobytes("png")).decode("ascii")))
-            doc.close()
         except Exception as e:
             job["error"] = f"Could not read PDF: {e}"
             job["status"] = "error"
             return
-        if not pages:
-            job["error"] = "PDF has no pages"
+
+        # `images` is the ONE list the batch loop iterates. total_pages is derived from
+        # it below so the reported count and the loop can never disagree.
+        images = []
+        page_count = doc.page_count
+        for i in range(page_count):
+            try:
+                page = doc.load_page(i)
+                pix = page.get_pixmap(dpi=150)
+                png_bytes = pix.tobytes("png")
+                images.append((i + 1, base64.standard_b64encode(png_bytes).decode("ascii")))
+            except Exception as e:
+                # Log and skip the bad page rather than silently losing the whole book.
+                print(f"[book-extract] page {i + 1}/{page_count} render FAILED: {e}", flush=True)
+        doc.close()
+
+        total_pages = len(images)
+        job["total_pages"] = total_pages
+        num_batches = (total_pages + 3) // 4
+        print(f"[book-extract] total_pages={total_pages} rendered_images={len(images)} "
+              f"batches={num_batches}", flush=True)
+
+        if not images:
+            job["error"] = "PDF rendered no page images"
             job["status"] = "error"
             return
-        job["total_pages"] = len(pages)
 
-        for start in range(0, len(pages), 4):
-            batch = pages[start:start + 4]
+        for start in range(0, len(images), 4):
+            batch = images[start:start + 4]
             batch_no = start // 4 + 1
             # Attach each page as a base64 PNG IMAGE block (vision). These PDFs are
             # image-only Kindle screenshots with NO text layer, so the model has to
@@ -693,7 +710,7 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
 
             idx += len(batch_extracts)
             job["extracts"].extend(batch_extracts)
-            job["done_pages"] = min(start + 4, len(pages))
+            job["done_pages"] = min(start + 4, len(images))
         job["status"] = "done"
     except Exception as e:
         # Keep whatever was already written; just flag the failure.
