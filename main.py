@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import os
+import io
 import json
 import re
 import base64
@@ -20,6 +21,7 @@ import threading
 import anthropic
 import httpx
 import fitz  # PyMuPDF — renders PDF pages to PNG for the Book Extract tool
+from PIL import Image  # downscale page images under Anthropic's 8000px vision limit
 
 app = FastAPI(title="Progyny Infinite Dashboard")
 
@@ -610,7 +612,9 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
             return
 
         # `images` is the ONE list the batch loop iterates. total_pages is derived from
-        # it below so the reported count and the loop can never disagree.
+        # it below so the reported count and the loop can never disagree. Each entry is
+        # (page_number, base64_jpeg, width, height).
+        MAX_SIDE = 1568  # Anthropic's recommended vision max; also well under the 8000px cap
         images = []
         page_count = doc.page_count
         for i in range(page_count):
@@ -618,7 +622,18 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
                 page = doc.load_page(i)
                 pix = page.get_pixmap(dpi=150)
                 png_bytes = pix.tobytes("png")
-                images.append((i + 1, base64.standard_b64encode(png_bytes).decode("ascii")))
+                # Downscale so the longest side <= 1568px; a 150-dpi capture is often
+                # larger than the 8000px limit, which 400s the whole batch.
+                img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+                w, h = img.size
+                if max(w, h) > MAX_SIDE:
+                    scale = MAX_SIDE / float(max(w, h))
+                    w, h = int(round(w * scale)), int(round(h * scale))
+                    img = img.resize((w, h), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=85)  # JPEG is fine for text pages, smaller
+                b64 = base64.standard_b64encode(buf.getvalue()).decode("ascii")
+                images.append((i + 1, b64, w, h))
             except Exception as e:
                 # Log and skip the bad page rather than silently losing the whole book.
                 print(f"[book-extract] page {i + 1}/{page_count} render FAILED: {e}", flush=True)
@@ -644,12 +659,13 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
             # the right page number, then the mode prompt is the final text block.
             content = []
             num_imgs = 0
-            for (pnum, b64) in batch:
+            for (pnum, b64, w, h) in batch:
                 content.append({"type": "text", "text": f"Page {pnum}:"})
                 content.append({"type": "image", "source": {
-                    "type": "base64", "media_type": "image/png", "data": b64}})
+                    "type": "base64", "media_type": "image/jpeg", "data": b64}})
                 num_imgs += 1
             content.append({"type": "text", "text": prompt_text})
+            dims = f"{batch[0][2]}x{batch[0][3]}" if batch else "0x0"
             text = ""
             try:
                 response = client.messages.create(
@@ -685,7 +701,7 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
                             })
 
             # One line per batch so 0-extract runs are diagnosable in Railway logs.
-            print(f"[book-extract] batch {batch_no}: imgs={num_imgs} "
+            print(f"[book-extract] batch {batch_no}: imgs={num_imgs} dims={dims} "
                   f"respChars={resp_chars} extracted={len(batch_extracts)}", flush=True)
 
             # File this batch to tier3_databank. Upsert on (section, source_id) so
