@@ -620,12 +620,20 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
 
         for start in range(0, len(pages), 4):
             batch = pages[start:start + 4]
+            batch_no = start // 4 + 1
+            # Attach each page as a base64 PNG IMAGE block (vision). These PDFs are
+            # image-only Kindle screenshots with NO text layer, so the model has to
+            # SEE the pages — a "Page N:" label precedes each image so extracts carry
+            # the right page number, then the mode prompt is the final text block.
             content = []
+            num_imgs = 0
             for (pnum, b64) in batch:
                 content.append({"type": "text", "text": f"Page {pnum}:"})
                 content.append({"type": "image", "source": {
                     "type": "base64", "media_type": "image/png", "data": b64}})
+                num_imgs += 1
             content.append({"type": "text", "text": prompt_text})
+            text = ""
             try:
                 response = client.messages.create(
                     model="claude-sonnet-4-6",
@@ -633,8 +641,10 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
                     messages=[{"role": "user", "content": content}],
                 )
                 text = " ".join(b.text for b in response.content if hasattr(b, "text")).strip()
-            except Exception:
-                text = ""  # skip a failed batch, keep going
+            except Exception as e:
+                # Surface the real reason in Railway logs instead of silently skipping.
+                print(f"[book-extract] batch {batch_no}: API call FAILED: {e}", flush=True)
+            resp_chars = len(text)  # raw model response length, before fence-stripping
 
             # Strip a ```json fence if Claude wrapped the array.
             if text.startswith("```"):
@@ -656,6 +666,10 @@ def _extract_book_worker(job_id, raw, book_name, mode, prompt_text):
                                 "page": item.get("page"),
                                 "theme": item.get("theme") or "",
                             })
+
+            # One line per batch so 0-extract runs are diagnosable in Railway logs.
+            print(f"[book-extract] batch {batch_no}: imgs={num_imgs} "
+                  f"respChars={resp_chars} extracted={len(batch_extracts)}", flush=True)
 
             # File this batch to tier3_databank. Upsert on (section, source_id) so
             # re-running the same book never duplicates.
