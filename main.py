@@ -1044,6 +1044,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .badge.active { background: #0d1a0d; color: #4caf50; border: 1px solid #4caf5044; }
   .badge.backburner { background: #1a1a1a; color: #555; border: 1px solid #33333344; }
   .badge.blocked { background: #1a0d0d; color: #e05555; border: 1px solid #e0555544; }
+  .tdy-sub-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .tdy-item { font-size: 13px; color: #e0e0e0; padding: 6px 0; border-bottom: 1px solid #1e1e1e; }
+  .tdy-item:last-child { border-bottom: none; }
+  .tdy-time { color: #c9a84c; font-family: monospace; margin-right: 10px; }
+  .tdy-empty { font-size: 13px; color: #555; padding: 6px 0; }
   textarea { width: 100%; background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 14px; color: #e0e0e0; font-size: 13px; font-family: monospace; resize: vertical; min-height: 160px; outline: none; line-height: 1.6; }
   textarea:focus { border-color: #c9a84c; }
   input[type="text"] { width: 100%; background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 11px 14px; color: #e0e0e0; font-size: 14px; font-family: inherit; outline: none; }
@@ -1195,6 +1200,47 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <!-- COMMAND CENTER -->
 <div class="panel active" id="panel-command">
+  <!-- TODAY — calendar + reminders synced from the Mac, with a local pending overlay. -->
+  <div class="two-col" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-title">Today</div>
+      <div id="todayBody">
+        <div class="result visible" style="min-height:auto;">Loading…</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">+ Add</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button type="button" id="addTypeReminder" class="tdy-type btn" onclick="tdySetType('reminder')" style="margin-top:0;">Reminder</button>
+        <button type="button" id="addTypeEvent" class="tdy-type btn btn-ghost" onclick="tdySetType('event')" style="margin-top:0;">Event</button>
+      </div>
+      <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Title</label>
+      <input type="text" id="addTitle" style="margin-bottom:14px;">
+      <div id="addReminderFields">
+        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Due date</label>
+        <input type="date" id="addDue" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-size:14px;font-family:inherit;outline:none;color-scheme:dark;">
+      </div>
+      <div id="addEventFields" style="display:none;">
+        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Date</label>
+        <input type="date" id="addDate" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-size:14px;font-family:inherit;outline:none;color-scheme:dark;margin-bottom:14px;">
+        <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Time</label>
+        <input type="time" id="addTime" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-size:14px;font-family:inherit;outline:none;color-scheme:dark;">
+      </div>
+      <button class="btn" id="addSubmit" onclick="tdyAdd()">Submit</button>
+      <div class="result" id="addResult"></div>
+    </div>
+  </div>
+  <!-- Command Center selector: card grid gates Sales / Agent / Marketing / Tracker / Niche below the project cards. No card active by default. -->
+  <div style="margin-top:22px;">
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">View</label>
+    <div class="tools-grid">
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'sales')"><div class="tool-icon">📊</div><div class="tool-name">Sales</div><div class="tool-desc">Revenue and customer metrics across the portfolio</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'agent')"><div class="tool-icon">🤖</div><div class="tool-name">Agent Control</div><div class="tool-desc">Run Load, Catalog, and Gauge for Tier 4</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'marketing')"><div class="tool-icon">📣</div><div class="tool-name">Marketing</div><div class="tool-desc">Drafts and campaign status</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'tracker')"><div class="tool-icon">✅</div><div class="tool-name">Project Tracker</div><div class="tool-desc">Open flags and build status</div></div>
+      <div class="tool-card cc-view-card" onclick="ccPick(this,'niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score a niche against the 5-criteria formula</div></div>
+    </div>
+  </div>
   <div class="projects-grid">
     <div class="project-card">
       <div class="project-name">⭐ ProgenyVault</div>
@@ -1232,17 +1278,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="project-status live">Live ✓</div>
       <div class="project-desc">Brain is running on Railway. Dashboard connected. Self-improving.</div>
       <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
-    </div>
-  </div>
-  <!-- Command Center selector: card grid gates Sales / Agent / Marketing / Tracker / Niche below the project cards. No card active by default. -->
-  <div style="margin-top:22px;">
-    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">View</label>
-    <div class="tools-grid">
-      <div class="tool-card cc-view-card" onclick="ccPick(this,'sales')"><div class="tool-icon">📊</div><div class="tool-name">Sales</div><div class="tool-desc">Revenue and customer metrics across the portfolio</div></div>
-      <div class="tool-card cc-view-card" onclick="ccPick(this,'agent')"><div class="tool-icon">🤖</div><div class="tool-name">Agent Control</div><div class="tool-desc">Run Load, Catalog, and Gauge for Tier 4</div></div>
-      <div class="tool-card cc-view-card" onclick="ccPick(this,'marketing')"><div class="tool-icon">📣</div><div class="tool-name">Marketing</div><div class="tool-desc">Drafts and campaign status</div></div>
-      <div class="tool-card cc-view-card" onclick="ccPick(this,'tracker')"><div class="tool-icon">✅</div><div class="tool-name">Project Tracker</div><div class="tool-desc">Open flags and build status</div></div>
-      <div class="tool-card cc-view-card" onclick="ccPick(this,'niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score a niche against the 5-criteria formula</div></div>
     </div>
   </div>
 
@@ -1717,6 +1752,152 @@ async function loadStatus() {
     gauge.textContent = 'Gauge unavailable';
   }
 }
+
+// TODAY — Calendar + Reminders synced from the Mac, plus a locally-added pending overlay.
+// Reads the same way the Marketing tab does: /tier3/records by section, then the
+// mktManifest rec.record -> JSON.parse(rec.content) fallback. Reuses T4_TOKEN.
+const TODAY = { addType: 'reminder' };
+
+// Read one record out of a Tier 3 section by source_id. Returns its parsed manifest,
+// or null when the section/record is absent or the request fails (treated as empty).
+async function tdyReadRecord(section, sourceId) {
+  try {
+    const res = await fetch('/tier3/records?section=' + encodeURIComponent(section) + '&limit=500', {
+      headers: {'X-API-Token': T4_TOKEN}
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const recs = (data && data.records) || [];
+    const rec = recs.find(r => String(r.source_id || '') === sourceId);
+    return rec ? mktManifest(rec) : null;
+  } catch(e) { return null; }
+}
+
+async function loadToday() {
+  const body = document.getElementById('todayBody');
+  if (!body) return;
+  const mac = await tdyReadRecord('reminders_calendar', 'mac');
+  const pendingRaw = await tdyReadRecord('reminders_calendar_pending', 'dashboard');
+  const pending = Array.isArray(pendingRaw) ? pendingRaw : [];
+  tdyRenderToday(body, mac, pending);
+}
+
+function tdyRenderToday(body, mac, pending) {
+  const hasMac = mac && typeof mac === 'object';
+  if (!hasMac && !pending.length) {
+    body.innerHTML = '<div class="result visible" style="min-height:auto;">Waiting for first sync from Mac.</div>';
+    return;
+  }
+  const events = (hasMac && Array.isArray(mac.events)) ? mac.events : [];
+  const reminders = (hasMac && Array.isArray(mac.reminders)) ? mac.reminders : [];
+  const pendEvents = pending.filter(p => p && p.type === 'event');
+  const pendReminders = pending.filter(p => p && p.type === 'reminder');
+
+  // Calendar: synced events (time + title) then any pending events, tagged "pending sync".
+  let cal = events.map(e =>
+    '<div class="tdy-item"><span class="tdy-time">' + mktEsc(e.time || '') + '</span>' + mktEsc(e.title || '') + '</div>');
+  cal = cal.concat(pendEvents.map(p =>
+    '<div class="tdy-item"><span class="badge backburner" style="margin-right:8px;">pending sync</span>' +
+    (p.time ? '<span class="tdy-time">' + mktEsc(p.time) + '</span>' : '') + mktEsc(p.title || '') + '</div>'));
+  const calHtml = cal.length ? cal.join('') : '<div class="tdy-empty">Nothing today</div>';
+
+  // Reminders: synced reminders (red "overdue" tag when overdue) then pending reminders.
+  let rem = reminders.map(r =>
+    '<div class="tdy-item">' + (r.overdue ? '<span class="badge blocked" style="margin-right:8px;">overdue</span>' : '') +
+    mktEsc(r.title || '') + '</div>');
+  rem = rem.concat(pendReminders.map(p =>
+    '<div class="tdy-item"><span class="badge backburner" style="margin-right:8px;">pending sync</span>' +
+    mktEsc(p.title || '') + '</div>'));
+  const remHtml = rem.length ? rem.join('') : '<div class="tdy-empty">Nothing today</div>';
+
+  body.innerHTML =
+    '<div class="tdy-sub-title">Calendar</div>' + calHtml +
+    '<div class="tdy-sub-title" style="margin-top:16px;">Reminders</div>' + remHtml;
+}
+
+// + Add card — Reminder/Event toggle swaps the gold-fill accent and the due vs date+time fields.
+function tdySetType(t) {
+  TODAY.addType = t;
+  const rBtn = document.getElementById('addTypeReminder');
+  const eBtn = document.getElementById('addTypeEvent');
+  if (rBtn) rBtn.className = 'tdy-type btn' + (t === 'reminder' ? '' : ' btn-ghost');
+  if (eBtn) eBtn.className = 'tdy-type btn' + (t === 'event' ? '' : ' btn-ghost');
+  const rf = document.getElementById('addReminderFields');
+  const ef = document.getElementById('addEventFields');
+  if (rf) rf.style.display = (t === 'reminder' ? 'block' : 'none');
+  if (ef) ef.style.display = (t === 'event' ? 'block' : 'none');
+}
+
+function tdyUuid() {
+  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch(e) {}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.floor(Math.random() * 16), v = (c === 'x') ? r : ((r & 0x3) | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Read-modify-write the whole pending array, then push it back to the SAME
+// section/source_id via /tier3/push (existing route + token — no new endpoint).
+async function tdyAdd() {
+  const result = document.getElementById('addResult');
+  const btn = document.getElementById('addSubmit');
+  const title = (document.getElementById('addTitle').value || '').trim();
+  const type = TODAY.addType;
+  result.className = 'result visible';
+  if (!title) { result.className = 'result visible error'; result.textContent = 'Title is required.'; return; }
+  const item = { id: tdyUuid(), type: type, title: title, created_at: new Date().toISOString() };
+  if (type === 'reminder') {
+    const due = document.getElementById('addDue').value;
+    if (!due) { result.className = 'result visible error'; result.textContent = 'Due date is required.'; return; }
+    item.due = due;
+  } else {
+    const date = document.getElementById('addDate').value;
+    const time = document.getElementById('addTime').value;
+    if (!date) { result.className = 'result visible error'; result.textContent = 'Date is required.'; return; }
+    item.date = date; item.time = time;
+  }
+  btn.disabled = true;
+  result.textContent = '⬤ Saving…';
+  try {
+    const existing = await tdyReadRecord('reminders_calendar_pending', 'dashboard');
+    const arr = Array.isArray(existing) ? existing.slice() : [];
+    arr.push(item);
+    const res = await fetch('/tier3/push', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-API-Token': T4_TOKEN},
+      body: JSON.stringify({ records: [{
+        section: 'reminders_calendar_pending',
+        source_id: 'dashboard',
+        source_type: 'dashboard_pending',
+        title: 'Dashboard pending reminders/events',
+        content: JSON.stringify(arr),
+        record: arr
+      }]})
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok !== true) throw new Error(data.detail || 'Push failed');
+    document.getElementById('addTitle').value = '';
+    document.getElementById('addDue').value = '';
+    document.getElementById('addDate').value = '';
+    document.getElementById('addTime').value = '';
+    result.className = 'result visible success';
+    result.textContent = 'Added.';
+    loadToday();
+  } catch(e) {
+    result.className = 'result visible error';
+    result.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Command Center is the default-active tab, so load once now, then poll both records
+// every 5 minutes while the tab is open.
+loadToday();
+setInterval(() => {
+  const p = document.getElementById('panel-command');
+  if (p && p.classList.contains('active')) loadToday();
+}, 300000);
 
 // MARKETING — read the marketing_status card via /tier3/records, render the agent board
 function mktEsc(s) {
