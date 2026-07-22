@@ -16,6 +16,7 @@ import re
 import base64
 import hashlib
 import uuid
+from datetime import datetime, timezone
 import asyncio
 import threading
 import anthropic
@@ -425,6 +426,92 @@ async def tier3_measure(_: bool = Depends(rt_auth)):
     total_chars = sum(len(r.get("content") or "") for r in rows)
     est_tokens = round(total_chars / 4)
     return {"count": len(rows), "total_chars": total_chars, "est_tokens": est_tokens}
+
+
+# ── DOCUMENTS TAB ────────────────────────────────────────────────────────────────
+# File store for the Documents tab. Files land in the "documents" storage bucket;
+# one metadata row per file goes to tier3_documents. Same service-role key + rt_auth
+# token guard as the tier3 routes above. Deliberately isolated: no tier4 reads/writes.
+DOCUMENTS_BUCKET = "documents"
+
+
+async def _sb_storage(method, path, content=None, json=None, content_type=None):
+    """Supabase Storage REST using the service-role key (apikey header ONLY, exactly
+    like _sb_service — sb_secret_ keys are not JWTs). `path` is appended to
+    {SUPABASE_URL}/storage/v1/."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500,
+                            detail="Supabase service env vars (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) not set")
+    headers = {"apikey": SUPABASE_SERVICE_ROLE_KEY}
+    if content_type:
+        headers["Content-Type"] = content_type
+    url = f"{SUPABASE_URL}/storage/v1/{path}"
+    async with httpx.AsyncClient(timeout=60) as hc:
+        r = await hc.request(method, url, headers=headers, content=content, json=json)
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail=f"Supabase storage error: {r.text}")
+    try:
+        return r.json()
+    except Exception:
+        return {}
+
+
+# UPLOAD — put the file in the bucket, then file one metadata row to tier3_documents.
+@app.post("/documents/upload")
+async def documents_upload(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    _: bool = Depends(rt_auth),
+):
+    raw = await file.read()
+    if not raw:
+        return JSONResponse({"error": "Empty file upload"}, status_code=400)
+    original = file.filename or "file"
+    # Unique object path so identically-named files never collide in the bucket.
+    object_path = f"{uuid.uuid4().hex}/{original}"
+    await _sb_storage(
+        "POST", f"object/{DOCUMENTS_BUCKET}/{object_path}",
+        content=raw,
+        content_type=file.content_type or "application/octet-stream",
+    )
+    row = {
+        "name": name,
+        "filename": original,
+        "file_path": object_path,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await _sb_service(
+        "POST", "tier3_documents",
+        json=[row],
+        prefer="return=representation",
+    )
+    return {"ok": True, "document": (res or [None])[0]}
+
+
+# LIST — every row from tier3_documents, newest first.
+@app.get("/documents/list")
+async def documents_list(_: bool = Depends(rt_auth)):
+    res = await _sb_service(
+        "GET", "tier3_documents",
+        params={
+            "select": "id,name,filename,file_path,uploaded_at",
+            "order": "uploaded_at.desc",
+        },
+    )
+    return {"count": len(res or []), "documents": res or []}
+
+
+# URL — a short-lived signed download URL for a given object path in the bucket.
+@app.get("/documents/url")
+async def documents_url(file_path: str, _: bool = Depends(rt_auth)):
+    res = await _sb_storage(
+        "POST", f"object/sign/{DOCUMENTS_BUCKET}/{file_path}",
+        json={"expiresIn": 3600},
+    )
+    signed = res.get("signedURL") or res.get("signedUrl")
+    if not signed:
+        raise HTTPException(status_code=500, detail="No signed URL returned by storage")
+    return {"url": f"{SUPABASE_URL}/storage/v1{signed}"}
 
 
 # ── TIER 3 -> TIER 4 BELT ────────────────────────────────────────────────────────
@@ -1193,6 +1280,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
   <button class="nav-tab" onclick="switchTab('employees')">Employees</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
+  <button class="nav-tab" onclick="switchTab('documents')">Documents</button>
   <!-- Tier 3 Paste tab hidden from UI. Backend /tier3/ingest route and #panel-tier3 stay intact, just unreachable from the nav.
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
@@ -1443,6 +1531,23 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<!-- DOCUMENTS -->
+<div class="panel" id="panel-documents">
+  <div class="card">
+    <div class="card-title">Upload Document</div>
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">File</label>
+    <input type="file" id="docFile" style="width:100%;background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;color:#e0e0e0;font-size:13px;font-family:inherit;outline:none;margin-bottom:14px;" />
+    <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Name</label>
+    <input type="text" id="docName" placeholder="Name this document..." />
+    <button class="btn" id="docSaveBtn" onclick="docUpload()">Save</button>
+    <div class="result" id="docStatus"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Documents</div>
+    <div id="docList"><div class="tdy-empty">Loading…</div></div>
+  </div>
+</div>
+
 <!-- FINANCE AI -->
 <div class="panel" id="panel-finance">
   <div class="card">
@@ -1641,12 +1746,13 @@ setInterval(checkAgent, 30000);
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
 function switchTab(tab) {
-  const tabs = ['command','finance','feeding','employees','tools','tier3'];
+  const tabs = ['command','finance','feeding','employees','tools','documents','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'feeding') rtSwitch(RT.sub);
   if (tab === 'employees') empRestore();
+  if (tab === 'documents') docLoad();
 }
 
 // EMPLOYEES tab -- static roster. Assigned Role persists in localStorage keyed by name.
@@ -2619,6 +2725,107 @@ async function ingestTier3() {
   } catch(e) {
     status.className = 'result visible error';
     status.textContent = '✗ ' + e.message;
+  }
+}
+
+// ═══════════════ Documents ═══════════════
+// Same X-API-Token guard (RT.token) as every other tab. Upload -> "documents"
+// bucket + tier3_documents row; list newest-first; each row opens a signed URL.
+function docFmtDate(s) {
+  if (!s) return '';
+  try { return new Date(s).toLocaleString(); } catch(e) { return s; }
+}
+
+async function docLoad() {
+  const list = document.getElementById('docList');
+  list.innerHTML = '<div class="tdy-empty">Loading…</div>';
+  try {
+    const res = await fetch('/documents/list', { headers: {'X-API-Token': RT.token} });
+    if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+    const data = await res.json();
+    const docs = data.documents || [];
+    if (!docs.length) { list.innerHTML = '<div class="tdy-empty">No documents yet.</div>'; return; }
+    list.innerHTML = '';
+    docs.forEach(d => {
+      const row = document.createElement('div');
+      row.className = 'tracker-row';
+      row.style.gridTemplateColumns = '2fr 2fr 1.5fr auto';
+      const name = document.createElement('div');
+      name.style.color = '#e0e0e0'; name.style.fontWeight = '600';
+      name.textContent = d.name || '(unnamed)';
+      const fname = document.createElement('div');
+      fname.style.color = '#888'; fname.style.fontFamily = 'monospace'; fname.style.fontSize = '11px';
+      fname.textContent = d.filename || '';
+      const date = document.createElement('div');
+      date.style.color = '#555'; date.style.fontSize = '12px';
+      date.textContent = docFmtDate(d.uploaded_at);
+      const btnWrap = document.createElement('div');
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost'; btn.style.marginTop = '0'; btn.style.padding = '6px 14px';
+      btn.textContent = 'Open';
+      btn.onclick = () => docOpen(d.file_path, btn);
+      btnWrap.appendChild(btn);
+      row.appendChild(name); row.appendChild(fname); row.appendChild(date); row.appendChild(btnWrap);
+      list.appendChild(row);
+    });
+  } catch(e) {
+    list.innerHTML = '<div class="result visible error">✗ ' + e.message + '</div>';
+  }
+}
+
+async function docOpen(filePath, btn) {
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch('/documents/url?file_path=' + encodeURIComponent(filePath), { headers: {'X-API-Token': RT.token} });
+    if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+    const data = await res.json();
+    if (data.url) window.open(data.url, '_blank');
+    else throw new Error('No URL returned');
+  } catch(e) {
+    alert('Could not open file: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+async function docUpload() {
+  const fileInput = document.getElementById('docFile');
+  const nameInput = document.getElementById('docName');
+  const status = document.getElementById('docStatus');
+  const btn = document.getElementById('docSaveBtn');
+  const file = fileInput.files && fileInput.files[0];
+  const name = nameInput.value.trim();
+  if (!file) { status.className = 'result visible error'; status.textContent = '✗ Choose a file first.'; return; }
+  if (!name) { status.className = 'result visible error'; status.textContent = '✗ Enter a name first.'; return; }
+  btn.disabled = true;
+  status.className = 'result visible';
+  status.textContent = '⬤ Uploading…';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', name);
+    const res = await fetch('/documents/upload', {
+      method: 'POST',
+      headers: {'X-API-Token': RT.token},
+      body: fd
+    });
+    if (!res.ok) throw new Error((await res.text()) || ('HTTP ' + res.status));
+    const data = await res.json();
+    if (data.ok) {
+      status.className = 'result visible success';
+      status.textContent = '✓ Saved: ' + name;
+      fileInput.value = '';
+      nameInput.value = '';
+      docLoad();
+    } else {
+      throw new Error(data.error || 'Failed');
+    }
+  } catch(e) {
+    status.className = 'result visible error';
+    status.textContent = '✗ ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 
