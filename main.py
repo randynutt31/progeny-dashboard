@@ -1277,7 +1277,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <nav class="nav">
   <button class="nav-tab active" onclick="switchTab('command')">Command Center</button>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
-  <button class="nav-tab" id="rtsub-feed-nav" onclick="switchTab('feeding')">Indigo</button>
   <button class="nav-tab" onclick="switchTab('employees')">Employees</button>
   <button class="nav-tab" onclick="switchTab('tools')">Tools</button>
   <button class="nav-tab" onclick="switchTab('documents')">Documents</button>
@@ -1689,36 +1688,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- REPTITERRA FEEDING -->
-<div class="panel" id="panel-feeding">
-  <div class="rt-wrap">
-    <div class="rt-subnav">
-      <div class="rt-subtab active" id="rtsub-animals" onclick="rtSwitch('animals')">Animals</div>
-      <div class="rt-subtab" id="rtsub-feed" onclick="rtSwitch('feed')">Feed</div>
-      <div class="rt-subtab" id="rtsub-supplies" onclick="rtSwitch('supplies')">Supplies</div>
-    </div>
-    <div class="rt-sub active" id="rtpane-animals">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="rt-title">Animals</div><button class="rt-btn" onclick="rtOpenAddAnimal()">+ Animal</button>
-      </div>
-      <div id="rtAnimals"></div>
-    </div>
-    <div class="rt-sub" id="rtpane-feed">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="rt-title">Feed Inventory</div><button class="rt-btn" onclick="rtOpenDelivery()">+ Delivery</button>
-      </div>
-      <div id="rtFeed"></div>
-    </div>
-    <div class="rt-sub" id="rtpane-supplies">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="rt-title">Supplies</div><button class="rt-btn" onclick="rtOpenAddSupply()">+ Supply</button>
-      </div>
-      <div id="rtSupplies"></div>
-    </div>
-  </div>
-  <div class="rt-modal-bg" id="rtModalBg"><div class="rt-modal" id="rtModal"></div></div>
-</div>
-
 <script>
 // All API calls go through our own server — no CORS issues
 async function callServer(endpoint, body) {
@@ -1746,11 +1715,10 @@ setInterval(checkAgent, 30000);
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
 function switchTab(tab) {
-  const tabs = ['command','finance','feeding','employees','tools','documents','tier3'];
+  const tabs = ['command','finance','employees','tools','documents','tier3'];
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'feeding') rtSwitch(RT.sub);
   if (tab === 'employees') empRestore();
   if (tab === 'documents') docLoad();
 }
