@@ -43,6 +43,7 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY els
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 FEEDING_TOKEN = os.environ.get("FEEDING_TOKEN", "")
+PUSH_TOKEN = os.environ.get("PUSH_TOKEN", "")
 # tier3_databank is RLS-locked (deny-all) and needs the service-role key. New-format
 # sb_secret_ keys are NOT JWTs: they go in the apikey header ONLY, never Authorization.
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -102,6 +103,12 @@ async def _sb_service(method, table, params=None, json=None, prefer=None):
 def rt_auth(x_api_token: str = Header(default="")):
     if FEEDING_TOKEN and x_api_token != FEEDING_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid API token")
+    return True
+
+
+def push_auth(x_api_token: str = Header(default="")):
+    if PUSH_TOKEN and x_api_token != PUSH_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid push token")
     return True
 
 
@@ -371,7 +378,7 @@ async def rt_add_supply_log(supply_id: str, req: Request, _: bool = Depends(rt_a
 # IN — every Tier 3 source posts here. Upsert on (section, source_id):
 # re-running an export updates, never duplicates.
 @app.post("/tier3/push")
-async def tier4_push(payload: dict, _: bool = Depends(rt_auth)):
+async def tier4_push(payload: dict, _: bool = Depends(push_auth)):
     records = payload["records"] if isinstance(payload, dict) and "records" in payload else [payload]
     rows = [{
         "section":     r.get("section", "randy"),
