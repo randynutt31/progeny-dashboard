@@ -1396,6 +1396,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="result" id="addResult"></div>
     </div>
   </div>
+  <div class="projects-grid" id="projectCards"></div>
   <!-- Command Center selector: card grid gates Sales / Agent / Marketing / Tracker / Niche below the project cards. No card active by default. -->
   <div style="margin-top:22px;">
     <label style="display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">View</label>
@@ -1407,7 +1408,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tool-card cc-view-card" onclick="ccPick(this,'niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score a niche against the 5-criteria formula</div></div>
     </div>
   </div>
-  <div class="projects-grid" id="projectCards"></div>
 
   <!-- CC: SALES -->
   <div id="cc-sales" style="display:none;margin-top:18px;">
