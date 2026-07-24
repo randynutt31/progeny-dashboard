@@ -1623,8 +1623,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <!-- TOOLS -->
 <div class="panel" id="panel-tools">
   <div class="tools-grid">
-    <div class="tool-card" onclick="switchTab('youtube')"><div class="tool-icon">▶️</div><div class="tool-name">YouTube Extractor</div><div class="tool-desc">Extract concepts from any YouTube video automatically</div></div>
-    <div class="tool-card" onclick="switchTab('finance')"><div class="tool-icon">📈</div><div class="tool-name">Finance AI</div><div class="tool-desc">Market queries, stock lookup, Vault Trader status</div></div>
     <div class="tool-card" onclick="switchTab('extract')"><div class="tool-icon">📖</div><div class="tool-name">Book Extract</div><div class="tool-desc">Turn a captured book PDF into brain extracts</div></div>
     <div class="tool-card" onclick="window.open('https://claude.ai','_blank')"><div class="tool-icon">⚡</div><div class="tool-name">Open Claude</div><div class="tool-desc">Launch Claude in a new tab for working sessions</div></div>
     <div class="tool-card" onclick="window.open('https://github.com/randynutt31','_blank')"><div class="tool-icon">🐙</div><div class="tool-name">GitHub</div><div class="tool-desc">View and manage your repos</div></div>
