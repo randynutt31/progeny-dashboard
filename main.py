@@ -1340,45 +1340,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tool-card cc-view-card" onclick="ccPick(this,'niche')"><div class="tool-icon">🎯</div><div class="tool-name">Niche Scorer</div><div class="tool-desc">Score a niche against the 5-criteria formula</div></div>
     </div>
   </div>
-  <div class="projects-grid">
-    <div class="project-card">
-      <div class="project-name">⭐ ProgenyVault</div>
-      <div class="project-status active">Active Build — Highest Priority</div>
-      <div class="project-desc">Exotic animal breeding records SaaS. Next.js / Supabase / Stripe. $29.99/mo single Pro tier.</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
-      <div style="font-size:11px;color:#444;margin-top:6px;">~45% complete — 18-25 hrs remaining</div>
-    </div>
-    <div class="project-card">
-      <div class="project-name">🐍 Den of Indigos</div>
-      <div class="project-status active">Active — Top of Funnel</div>
-      <div class="project-desc">Content hub centered on Brigs. Kit email list. YouTube / TikTok. Lead magnets live.</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
-    </div>
-    <div class="project-card">
-      <div class="project-name">🧪 ReptiTerra Labs</div>
-      <div class="project-status backburner">Back Burner</div>
-      <div class="project-desc">Digital substrate PDFs on Gumroad. $9.99/blend. Listing copy incomplete.</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div>
-    </div>
-    <div class="project-card">
-      <div class="project-name">📈 Vault Trader</div>
-      <div class="project-status backburner">Built — Undeployed</div>
-      <div class="project-desc">Personal trading agent. RSI + Bollinger Bands. Blocked on Alpaca 2FA (Authy).</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:90%"></div></div>
-    </div>
-    <div class="project-card">
-      <div class="project-name">🏭 Progyny Infinite Trust</div>
-      <div class="project-status backburner">Pending DOR Audit</div>
-      <div class="project-desc">Oregon Business Trust formation. Letter expected June 30. Bring to Claude first.</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:20%"></div></div>
-    </div>
-    <div class="project-card">
-      <div class="project-name">🧠 PICP + Agent</div>
-      <div class="project-status live">Live ✓</div>
-      <div class="project-desc">Brain is running on Railway. Dashboard connected. Self-improving.</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
-    </div>
-  </div>
+  <div class="projects-grid" id="projectCards"></div>
 
   <!-- CC: SALES -->
   <div id="cc-sales" style="display:none;margin-top:18px;">
@@ -1742,6 +1704,29 @@ async function loadProjects() {
   }
 }
 loadProjects();
+
+const CARD_COLOR = { active:'#c9a84c', done:'#4caf50', live:'#4caf50', backburner:'#555', blocked:'#e05555', pending:'#e05555' };
+async function loadProjectCards() {
+  const grid = document.getElementById('projectCards');
+  if (!grid) return;
+  try {
+    const rows = await fetch('/api/projects').then(r => r.json());
+    if (!Array.isArray(rows) || !rows.length) { grid.innerHTML = '<div class="project-card"><div class="project-desc">No projects yet.</div></div>'; return; }
+    grid.innerHTML = rows.map(function(p) {
+      const color = CARD_COLOR[p.status] || '#555';
+      const pct = p.progress == null ? 0 : p.progress;
+      return '<div class="project-card">'
+        + '<div class="project-name">' + projEsc(p.icon ? p.icon + ' ' : '') + projEsc(p.name) + '</div>'
+        + '<div class="project-status" style="color:' + color + '">' + (projEsc(p.tagline) || '') + '</div>'
+        + '<div class="project-desc">' + (projEsc(p.description) || '') + '</div>'
+        + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
+        + '</div>';
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = '<div class="project-card"><div class="project-desc" style="color:#e05555">Could not load projects.</div></div>';
+  }
+}
+loadProjectCards();
 // Sales no longer auto-loads on page/tab entry — it loads only when the Command
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
