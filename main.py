@@ -186,6 +186,63 @@ async def get_projects():
     return await _sb("GET", "projects", params={"select": "*", "order": "sort_order.asc"})
 
 
+# ── Health checker — polls each service, writes real status to the services table ──
+# Layer 2 (visibility) only: this READS and WRITES status. It does not fix anything.
+# Auto-heal (Layer 1) is a separate, narrower build layered on top of this later.
+
+async def _check_one(svc):
+    """Ping one service; return (status, error_or_None)."""
+    kind = svc.get("kind")
+    target = svc.get("check_target")
+    try:
+        if kind == "database":
+            # a trivial read proves Supabase is reachable
+            await _sb("GET", "services", params={"select": "id", "limit": "1"})
+            return ("healthy", None)
+        if not target:
+            return ("healthy", None)
+        async with httpx.AsyncClient(timeout=10) as hc:
+            r = await hc.get(target)
+        if r.status_code < 400:
+            return ("healthy", None)
+        return ("down", f"HTTP {r.status_code}")
+    except Exception as e:
+        return ("down", str(e)[:300])
+
+
+async def run_health_checks():
+    """Check every service once and write the results back to the table."""
+    try:
+        services = await _sb("GET", "services", params={"select": "*"})
+    except Exception:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    for svc in services or []:
+        status, error = await _check_one(svc)
+        try:
+            await _sb(
+                "PATCH", "services",
+                params={"id": f"eq.{svc['id']}"},
+                json={"status": status, "last_error": error, "last_checked": now},
+                prefer="return=minimal",
+            )
+        except Exception:
+            pass
+
+
+async def _health_loop():
+    # small initial delay so startup finishes first
+    await asyncio.sleep(5)
+    while True:
+        await run_health_checks()
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def _start_health_loop():
+    asyncio.create_task(_health_loop())
+
+
 # ── ReptiTerra feeding routes ─────────────────────────────────────────────────
 
 # Animals
@@ -1529,7 +1586,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div style="font-size:13px;color:#555;line-height:1.7;">
       <div>Strategy: RSI + Bollinger Bands + Volume Spike</div>
       <div>Universe: 50 large-cap symbols | Position: 15% | Stop: 3% | TP: 5%</div>
-      <div style="margin-top:10px;color:#e05555;">Status: Undeployed — Blocked on Alpaca 2FA (Authy)</div>
+      <div style="margin-top:10px;color:#4caf50;">Status: Deployed — Paper trading</div>
     </div>
   </div>
 </div>
