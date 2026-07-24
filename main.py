@@ -181,6 +181,11 @@ async def agent_status():
         return {"online": False}
 
 
+@app.get("/api/projects")
+async def get_projects():
+    return await _sb("GET", "projects", params={"select": "*", "order": "sort_order.asc"})
+
+
 # ── ReptiTerra feeding routes ─────────────────────────────────────────────────
 
 # Animals
@@ -1449,12 +1454,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="card">
       <div class="card-title">Active Builds</div>
       <div class="tracker-row tracker-header"><div>Project</div><div>Status</div><div>Progress</div><div>Next Action</div></div>
-      <div class="tracker-row"><div style="font-weight:600">ProgenyVault</div><div><span class="badge priority">Priority</span></div><div style="color:#c9a84c">45%</div><div style="color:#888;font-size:12px">Stack orientation → resume build</div></div>
-      <div class="tracker-row"><div style="font-weight:600">Den of Indigos</div><div><span class="badge active">Active</span></div><div style="color:#4caf50">60%</div><div style="color:#888;font-size:12px">Resend domain verify → email sequences live</div></div>
-      <div class="tracker-row"><div style="font-weight:600">ReptiTerra Labs</div><div><span class="badge backburner">Backburner</span></div><div style="color:#555">70%</div><div style="color:#888;font-size:12px">Write Tropical + Tunnel Blend copy</div></div>
-      <div class="tracker-row"><div style="font-weight:600">Vault Trader</div><div><span class="badge blocked">Blocked</span></div><div style="color:#e05555">90%</div><div style="color:#888;font-size:12px">Authy 2FA → Alpaca keys → Railway deploy</div></div>
-      <div class="tracker-row"><div style="font-weight:600">Progyny Infinite Trust</div><div><span class="badge blocked">Pending</span></div><div style="color:#e05555">20%</div><div style="color:#888;font-size:12px">Wait for DOR audit letter June 30</div></div>
-      <div class="tracker-row"><div style="font-weight:600">PICP + Agent + Dashboard</div><div><span class="badge active">Live</span></div><div style="color:#4caf50">90%</div><div style="color:#888;font-size:12px">Package for Shawn Dark + user manual</div></div>
+      <div id="activeBuildsBody"></div>
     </div>
     <div class="card">
       <div class="card-title">Factory Pipeline</div>
@@ -1718,6 +1718,30 @@ async function checkAgent() {
 }
 checkAgent();
 setInterval(checkAgent, 30000);
+
+const PROJ_BADGE = { priority:'priority', active:'active', backburner:'backburner', blocked:'blocked', pending:'blocked', live:'active', done:'active' };
+const PROJ_COLOR = { priority:'#c9a84c', active:'#4caf50', live:'#4caf50', done:'#4caf50', backburner:'#555', blocked:'#e05555', pending:'#e05555' };
+function projEsc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function loadProjects() {
+  const body = document.getElementById('activeBuildsBody');
+  if (!body) return;
+  try {
+    const rows = await fetch('/api/projects').then(r => r.json());
+    if (!Array.isArray(rows) || !rows.length) { body.innerHTML = '<div class="tracker-row"><div style="color:#888">No projects yet.</div></div>'; return; }
+    body.innerHTML = rows.map(function(p) {
+      const badge = PROJ_BADGE[p.status] || 'backburner';
+      const color = PROJ_COLOR[p.status] || '#888';
+      const label = p.status ? p.status.charAt(0).toUpperCase() + p.status.slice(1) : '';
+      return '<div class="tracker-row"><div style="font-weight:600">' + projEsc(p.name) + '</div>'
+        + '<div><span class="badge ' + badge + '">' + projEsc(label) + '</span></div>'
+        + '<div style="color:' + color + '">' + (p.progress == null ? '' : p.progress + '%') + '</div>'
+        + '<div style="color:#888;font-size:12px">' + (projEsc(p.next_action) || '') + '</div></div>';
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<div class="tracker-row"><div style="color:#e05555">Could not load projects.</div></div>';
+  }
+}
+loadProjects();
 // Sales no longer auto-loads on page/tab entry — it loads only when the Command
 // Center "Sales" dropdown option is picked (ccShow), keeping the empty default.
 
