@@ -1150,31 +1150,39 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .agent-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; }
   .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #333; transition: background 0.3s; }
   .status-dot.online { background: #4caf50; box-shadow: 0 0 6px #4caf5066; }
+  .shell { display: flex; align-items: flex-start; min-height: calc(100vh - 56px); }
   .nav {
     background: #0f0f0f;
-    border-bottom: 1px solid #1a1a1a;
+    border-right: 1px solid #1a1a1a;
     display: flex;
-    overflow-x: auto;
-    padding: 0 24px;
+    flex-direction: column;
+    padding: 16px 0;
     gap: 2px;
+    width: 210px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 56px;
+    align-self: flex-start;
   }
-  .nav::-webkit-scrollbar { height: 0; }
   .nav-tab {
-    padding: 14px 20px;
+    padding: 12px 22px;
     font-size: 13px;
     font-weight: 500;
-    color: #444;
+    color: #666;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    text-align: left;
+    border-left: 3px solid transparent;
     transition: all 0.2s;
     white-space: nowrap;
     background: none;
-    border-top: none; border-left: none; border-right: none;
+    border-top: none; border-right: none; border-bottom: none;
     font-family: inherit;
+    width: 100%;
   }
-  .nav-tab:hover { color: #888; }
-  .nav-tab.active { color: #c9a84c; border-bottom-color: #c9a84c; }
-  .panel { display: none; padding: 28px 24px; max-width: 1200px; margin: 0 auto; }
+  .nav-tab:hover { color: #999; background: #141414; }
+  .nav-tab.active { color: #c9a84c; border-left-color: #c9a84c; background: #16130c; }
+  .content { flex: 1; min-width: 0; }
+  .panel { display: none; padding: 28px 32px; max-width: 1200px; }
   .panel.active { display: block; }
   .card { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
   .card-title { font-size: 11px; font-weight: 600; color: #c9a84c; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px; }
@@ -1343,6 +1351,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<div class="shell">
 <nav class="nav">
   <button class="nav-tab active" onclick="switchTab('command')">Command Center</button>
   <button class="nav-tab" onclick="switchTab('finance')">Finance AI</button>
@@ -1353,6 +1362,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <button class="nav-tab" onclick="switchTab('tier3')">Tier 3 Paste</button>
   -->
 </nav>
+<div class="content">
 
 <!-- COMMAND CENTER -->
 <div class="panel active" id="panel-command">
@@ -1713,6 +1723,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </table>
   </div>
 </div>
+
+  </div><!-- /content -->
+</div><!-- /shell -->
 
 <script>
 // All API calls go through our own server — no CORS issues
